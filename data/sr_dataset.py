@@ -246,7 +246,7 @@ class DataGeneratorTrain:
             sent_config['source_stream_idx'] = index[0]
             sent_config['source_utt_id'] = [self.single_source_simulator.speech_streams[index[0]].utt_id[index[1]]]
             sent_config['source_speakers'] = [self.single_source_simulator.speech_streams[index[0]].utt2spk[sent_config['source_utt_id'][0]]]
-            mixed_wav, early_reverb, mask, config = self.single_source_simulator.simulate(sent_config=sent_config, normalize_gain=self.config.gain_norm)
+            mixed_wav, early_reverb, mask, config = self.single_source_simulator.simulate(sent_cfg=sent_config, normalize_gain=self.config.gain_norm)
 
         speech_stream = self.single_source_simulator.speech_streams[config['source_stream_idx']]
         fbank = simu.feature.logfbank80(mixed_wav[:,0])

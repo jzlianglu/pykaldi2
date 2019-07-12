@@ -35,7 +35,7 @@ import pickle
 import torch as th
 import torch.nn as nn
 
-import reader
+import feature
 from data import SpeechDataset, ChunkDataloader, SeqDataloader
 from models import LSTMStack, NnetAM
 from utils import utils
@@ -52,9 +52,8 @@ def main():
     parser.add_argument("-max_grad_norm", default=5, type=float, help="max_grad_norm for gradient clipping")                     
     parser.add_argument("-sweep_size", default=200, type=float, help="process n hours of data per sweep (default:200)")
     parser.add_argument("-num_epochs", default=1, type=int, help="number of training epochs (default:1)") 
-    parser.add_argument("-use_cmn", default=False, type=bool, help="whether to apply utterance level mean normalization")
     parser.add_argument("-global_mvn", default=False, type=bool, help="if apply global mean and variance normalization")
-    parser.add_argument("-resume_from_model", type=str, help="the model from which you want to resume training")
+    parser.add_argument("-resume_from_model", type=str, help="the model from which you want to resume training")         
     parser.add_argument("-dropout", type=float, help="set the dropout ratio")                                        
     parser.add_argument("-aneal_lr_epoch", default=2, type=int, help="start to aneal the learning rate from this epoch")  # aneal -> anneal?
     parser.add_argument("-aneal_lr_ratio", default=0.5, type=float, help="the ratio to aneal the learning rate")
@@ -70,8 +69,10 @@ def main():
     with open(args.data) as f:
         data = yaml.safe_load(f)
         config["source_paths"] = [j for i, j in data['clean_source'].items()]
-        config["dir_noise_paths"] = [j for i, j in data['dir_noise'].items()]
-        config["rir_paths"] = [j for i, j in data['rir'].items()]
+        if 'dir_noise' in data:
+            config["dir_noise_paths"] = [j for i, j in data['dir_noise'].items()]
+        if 'rir' in data:
+            config["rir_paths"] = [j for i, j in data['rir'].items()]
     config['data_path'] = args.dataPath
 
     print("Experiment starts with config {}".format(json.dumps(config, sort_keys=True, indent=4)))
@@ -80,15 +81,18 @@ def main():
         os.makedirs(args.exp_dir)
 
     trainset = SpeechDataset(config)
-    train_dataloader = ChunkDataloader(trainset, batch_size=args.batch_size, num_workers=args.data_loader_threads)
+    train_dataloader = ChunkDataloader(trainset, 
+                                       batch_size=args.batch_size,
+                                       num_workers=args.data_loader_threads,
+                                       global_mvn=args.global_mvn)
 
     if args.global_mvn:
-        transform = reader.preprocess.GlobalMeanVarianceNormalization()
+        transform = feature.preprocess.GlobalMeanVarianceNormalization()
         print("Estimating global mean and variance of feature vectors...")
-        transform.learn_mean_and_variance_from_train_loader(trainset,
-                                                            trainset.stream_idx_for_transform,
-                                                            n_sample_to_use=2000)
-        trainset.transform = transform
+        transform.learn_mean_and_variance_from_train_loader(train_dataloader,
+                                                        train_dataloader.stream_keys_for_transform,
+                                                        n_sample_to_use=2000)
+        train_dataloader.transform = transform
         print("Global mean and variance transform trained successfully!")
 
         with open(args.exp_dir+"/transform.pkl", 'wb') as f:

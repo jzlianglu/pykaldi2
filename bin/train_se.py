@@ -54,7 +54,8 @@ from utils import utils
 def main():
     parser = argparse.ArgumentParser()                                                                                 
     parser.add_argument("-config")                                                                                    
-    parser.add_argument("-data", help="data yaml file") 
+    parser.add_argument("-data", help="data yaml file")
+    parser.add_argument("-data_path", default='', type=str, help="path of data files") 
     parser.add_argument("-seed_model", help="the seed nerual network model")                                                                                  
     parser.add_argument("-exp_dir", help="the directory to save the outputs")
     parser.add_argument("-transform", help="feature transformation matrix or mvn statistics") 
@@ -70,13 +71,15 @@ def main():
     parser.add_argument("-max_grad_norm", default=5, type=float, help="max_grad_norm for gradient clipping")                     
     parser.add_argument("-sweep_size", default=100, type=float, help="process n hours of data per sweep (default:60)")
     parser.add_argument("-num_epochs", default=1, type=int, help="number of training epochs (default:1)") 
-    parser.add_argument('-p', '--print-freq', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('-print_freq', default=10, type=int, metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('-save_freq', default=1000, type=int, metavar='N', help='save model frequency (default: 1000)')
 
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
+    config['data_path'] = args.data_path
 
     config["sweep_size"] = args.sweep_size
 
@@ -95,20 +98,18 @@ def main():
 
     print("Run experiments with world size {}".format(hvd.size()))
 
+    dataset = SpeechDataset(config)
     transform=None
     if args.transform is not None and os.path.isfile(args.transform):
         with open(args.transform, 'rb') as f:
             transform = pickle.load(f)
+            dataset.transform = transform
 
-    dataset = SpeechDataset(config)
-    #data = trainset.__getitem__(0)
     train_dataloader = SeqDataloader(dataset,
                                     batch_size=args.batch_size,
                                     num_workers = args.data_loader_threads,
                                     distributed=True,
-                                    test_only=False,
-                                    global_mvn=True,
-                                    transform=transform)
+                                    test_only=False)
 
     print("Data loader set up successfully!")
     print("Number of minibatches: {}".format(len(train_dataloader)))
@@ -269,6 +270,14 @@ def run_train_epoch(model, optimizer, log_prior, dataloader, epoch, asr_decoder,
 
         # measure elapsed time
         batch_time.update(time.time() - end)
+
+        # save model
+        if hvd.rank() == 0 and i % args.save_freq == 0:
+            checkpoint={}
+            checkpoint['model']=model.state_dict()
+            checkpoint['optimizer']=optimizer.state_dict()
+            output_file=args.exp_dir + '/model.se.'+ str(i) +'.tar'
+            th.save(checkpoint, output_file)
 
         if hvd.rank() == 0 and i % args.print_freq == 0:
             progress.print(i)
