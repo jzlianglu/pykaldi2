@@ -64,4 +64,6 @@ python train_se.py -config configs/mmi.yaml \
     -batch_size 4 \
   ```
 
+## Reference
 
+Liang Lu, Xiong Xiao, Zhuo Chen, Yifan Gong, "PyKaldi2: Yet another speech toolkit based on Kaldi and PyTorch", arxiv, 2019
