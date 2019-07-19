@@ -32,21 +32,22 @@ import time
 import json
 import pickle
 
+import horovod.torch as hvd
 import torch as th
 import torch.nn as nn
 
-import feature
-from data import SpeechHDF5Dataset, ChunkDataloader, SeqDataloader
+import reader
+from data import SpeechDataset, ChunkDataloader, SeqDataloader
 from models import LSTMStack, NnetAM
 from utils import utils
 
 def main():
     parser = argparse.ArgumentParser()                                                                                 
-    parser.add_argument("-config")                                                                                     
-    parser.add_argument("-exp_dir")
+    parser.add_argument("-exp_dir")   
     parser.add_argument("-dataPath", default='', type=str, help="path of data files")
-    parser.add_argument("-data")                                                                                
-    parser.add_argument("-lr", default=0.001, type=float, help="Override the LR in the config")  
+    parser.add_argument("-train_config")
+    parser.add_argument("-data_config")
+    parser.add_argument("-lr", default=0.0001, type=float, help="Override the LR in the config") 
     parser.add_argument("-batch_size", default=32, type=int, help="Override the batch size in the config")                         
     parser.add_argument("-data_loader_threads", default=1, type=int, help="number of workers for data loading")
     parser.add_argument("-max_grad_norm", default=5, type=float, help="max_grad_norm for gradient clipping")                     
@@ -62,30 +63,40 @@ def main():
 
     args = parser.parse_args()
 
-    with open(args.config) as f:
+    with open(args.train_config_file) as f:
         config = yaml.safe_load(f)
 
     config["sweep_size"] = args.sweep_size
-    with open(args.data) as f:
+    with open(args.data_config_file) as f:
         data = yaml.safe_load(f)
         config["source_paths"] = [j for i, j in data['clean_source'].items()]
-        config["dir_noise_paths"] = [j for i, j in data['dir_noise'].items()]
-        config["rir_paths"] = [j for i, j in data['rir'].items()]
+        if 'dir_noise' in data:
+            config["dir_noise_paths"] = [j for i, j in data['dir_noise'].items()]
+        if 'rir' in data:
+            config["rir_paths"] = [j for i, j in data['rir'].items()]
+
     config['data_path'] = args.dataPath
 
     print("Experiment starts with config {}".format(json.dumps(config, sort_keys=True, indent=4)))
 
+     # Initialize Horovod
+    hvd.init()
+
+    th.cuda.set_device(hvd.local_rank())
+
+    print("Run experiments with world size {}".format(hvd.size()))
+
     if not os.path.isdir(args.exp_dir):
         os.makedirs(args.exp_dir)
 
-    trainset = SpeechHDF5Dataset(config)
+    trainset = SpeechDataset(config)
     train_dataloader = ChunkDataloader(trainset, 
                                        batch_size=args.batch_size,
-                                       num_workers=args.data_loader_threads,
-                                       global_mvn=args.global_mvn)
+                                       distributed=True,
+                                       num_workers=args.data_loader_threads)
 
     if args.global_mvn:
-        transform = feature.preprocess.GlobalMeanVarianceNormalization()
+        transform = reader.preprocess.GlobalMeanVarianceNormalization()
         print("Estimating global mean and variance of feature vectors...")
         transform.learn_mean_and_variance_from_train_loader(train_dataloader,
                                                         train_dataloader.stream_keys_for_transform,
@@ -106,13 +117,18 @@ def main():
 
     # Start training
     th.backends.cudnn.enabled = True
-    device = th.device("cuda" if th.cuda.is_available() else "cpu")
     if th.cuda.is_available():
         model.cuda()
-    model = nn.DataParallel(model, dim=0)
 
     # optimizer
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr, amsgrad=True)
+
+    # Broadcast parameters and opterimizer state from rank 0 to all other processes.
+    hvd.broadcast_parameters(model.state_dict(), root_rank=0)
+    hvd.broadcast_optimizer_state(optimizer, root_rank=0)
+
+    # Add Horovod Distributed Optimizer
+    optimizer = hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters())
 
     # criterion
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
@@ -140,12 +156,13 @@ def main():
         run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args)
 
         # save model
-        checkpoint={}
-        checkpoint['model']=model.state_dict()
-        checkpoint['optimizer']=optimizer.state_dict()
-        checkpoint['epoch']=epoch
-        output_file=args.exp_dir + '/model.'+ str(epoch) +'.tar'
-        th.save(checkpoint, output_file)
+        if hvd.rank()== 0:
+            checkpoint={}
+            checkpoint['model']=model.state_dict()
+            checkpoint['optimizer']=optimizer.state_dict()
+            checkpoint['epoch']=epoch
+            output_file=args.exp_dir + '/model.'+ str(epoch) +'.tar'
+            th.save(checkpoint, output_file)
 
 def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
     batch_time = utils.AverageMeter('Time', ':6.3f')
@@ -186,7 +203,7 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
         # measure elapsed time
         batch_time.update(time.time() - end)
 
-        if i % args.print_freq == 0:
+        if hvd.rank() == 0 and i % args.print_freq == 0:
             progress.print(i)
 
 if __name__ == '__main__':
