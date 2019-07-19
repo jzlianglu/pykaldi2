@@ -16,7 +16,27 @@ The top-level script for CE training is "run\_ce.sh", which is like
     -aneal_lr_epoch 3 \
     -num_epochs 8 \
     -aneal_lr_ratio 0.5 
+  ```
+The ce.yaml file contains the data and model configurations. The data.yaml file contains the data, which are raw waveforms, and labels. The data.yaml in the above example is like
 
   ```
+   clean_source:                                                            
+  1:                                                                     
+    type: Librispeech                                                    
+    wav: /datadisk2/lial/LibriSpeechWav/train-clean-100.zip              
+    label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt          
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt    
+  2:                                                                     
+    type: Librispeech                                                    
+    wav: /datadisk2/lial/LibriSpeechWav/train-clean-360.zip              
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt    
+    label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt          
+  3:                                                                     
+    type: Librispeech                                                    
+    wav: /datadisk2/lial/LibriSpeechWav/train-other-500.zip              
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt    
+    label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt
+  ```
+
 
 
