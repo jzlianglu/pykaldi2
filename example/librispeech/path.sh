@@ -1,2 +1,2 @@
-export PYTHONPATH=$PYTHONPATH:/datadisk2/lial/release/master/pykaldi2/
+export PYTHONPATH=$PYTHONPATH:/path-to/pykaldi2/
 
