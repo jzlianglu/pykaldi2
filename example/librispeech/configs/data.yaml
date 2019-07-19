@@ -1,0 +1,25 @@
+clean_source:
+  1:    
+    type: Librispeech
+    wav: /datadisk2/lial/LibriSpeechWav/train-clean-100.zip
+    label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt
+  2:
+    type: Librispeech
+    wav: /datadisk2/lial/LibriSpeechWav/train-clean-360.zip 
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt
+    label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt
+  3: 
+    type: Librispeech
+    wav: /datadisk2/lial/LibriSpeechWav/train-other-500.zip
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt
+    label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt
+
+#dir_noise:
+#  1:
+#    type: Noise
+#    wav: Path-to\noise.zip
+#rir:
+#  1:
+#    type: RIR
+#    wav: Path-to\rir.zip
