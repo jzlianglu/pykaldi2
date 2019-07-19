@@ -1,6 +1,6 @@
 # pykaldi2
 
-PyKaldi2 is a speech toolkit that is built based on [Kaldi](http://kaldi-asr.org/) and [PyTorch](https://pytorch.org/). It relies on [PyKaldi](https://github.com/pykaldi/pykaldi) -- the Python wrapper of Kaldi, to access Kaldi functionalities. The key features of PyKaldi2 are one-the-fly lattice generation for lattice-based sequence training, on-the-fly data simulation and on-the-fly alignment gereation. 
+PyKaldi2 is a speech toolkit that is built based on [Kaldi](http://kaldi-asr.org/) and [PyTorch](https://pytorch.org/). It relies on [PyKaldi](https://github.com/pykaldi/pykaldi) - the Python wrapper of Kaldi, to access Kaldi functionalities. The key features of PyKaldi2 are one-the-fly lattice generation for lattice-based sequence training, on-the-fly data simulation and on-the-fly alignment gereation. 
 
 ## How to install
 
@@ -14,7 +14,7 @@ PyKaldi2 runs on top of the [Horovod](https://github.com/horovod/horovod) and Py
 2. Build the docker image, simply run
 
   ```
-    docker build -t horovod-pykaldi -f docker/dockerfile 
+    docker build -t horovod-pykaldi -f docker/Dockerfile 
   ```
 
 3. Activate the docker image, for example
@@ -48,7 +48,7 @@ We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V10
 
 ## Example
 
-To use PyKaldi2, you need to run the Kaldi speech toolkit up to the end of GMM training state. PyKaldi2 will rely on the alignments and the denominator graph from the GMM system for CE and SE training. An example of the Librispeech system is given in the example directory. 
+To use PyKaldi2, you need to run the Kaldi speech toolkit up to the end of GMM training state. PyKaldi2 will rely on the alignments and the denominator graph from the GMM system for CE and SE training. An example of the Librispeech system is given in the [example](https://github.com/jzlianglu/pykaldi2/tree/master/example) directory. 
 
 ## Future works
 
@@ -59,7 +59,7 @@ Currently, the toolkit is still in the early stage, and we are still improving i
  4. Joint frontend and backend optimization. 
  5. Support more neural network models
 
-If you are intersted to contribute to this line of research, please contact Liang Lu (email address can be found in the arxiv paper). 
+If you are intersted to contribute to this line of research, please contact Liang Lu (email address is provided in the arxiv paper). 
 
 ## Reference
 
