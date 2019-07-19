@@ -34,12 +34,17 @@ Please refer to [Horovod](https://github.com/horovod/horovod) for running cross-
 
 We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V100 GPUs. We used BLSTM acoustic models with 3 hidden layers and each layer has 512 hidden units. 
 
-| model | loss | batch_size| #GPUs |iRTF |
+| model | loss | bsxlen    | #GPUs |iRTF |
 |------ | -----| ----------| ------|---- |
 |       | CE   | 64x80     |  1    | 190 |
 |       | CE   | 64x80     |  4    | 220 |
 |       | CE   | 256x80    |  4    | 520 |
-|       | CE   | 1024x80   | 16    | 1356|
+| BLSTM | CE   | 1024x80   | 16    | 1356|
+|       | MMI  | 1 x *     | 1     | 11.6|
+|       | MMI  | 4 x *     | 1     | 16.7|
+|       | MMI  | 4 x *     | 4     | 34.5|
+|       | MMI  | 16 x *    | 4     | 50.4|
+
 
 ## Cross-entropy training
 
