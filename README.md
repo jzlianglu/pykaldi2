@@ -9,7 +9,7 @@ PyKaldi2 runs on top of the [Horovod](https://github.com/horovod/horovod) and Py
 1. Clone the repo by
 
    ```
-     git clone https://github.com/jzlianglu/pykaldi2.git
+    git clone https://github.com/jzlianglu/pykaldi2.git
    ```
 2. Build the docker image, simply run
 
@@ -46,41 +46,21 @@ We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V10
 |       | MMI  | 16 x *    | 4     | 50.4|
 
 
-## Cross-entropy training
+## Example
 
-An example of runing a cross-entropy job is
+To use PyKaldi2, you need to run the Kaldi speech toolkit up to the end of GMM training state. PyKaldi2 will rely on the alignments and the denominator graph from the GMM system for CE and SE training. An example of the Librispeech system is given in the example directory. 
 
-  ```
-   python train_ce.py -config configs/ce.yaml \  
-    -data configs/data.yaml \                 
-    -exp_dir exp/tr960_blstm_3x512_dp02 \     
-    -lr 0.0002 \                              
-    -batch_size 64 \                          
-    -sweep_size 960 \                         
-    -aneal_lr_epoch 3 \                       
-    -num_epochs 8 \                           
-    -aneal_lr_ratio 0.5                 
-  ```
+## Future works
 
-## Sequence training
+Currently, the toolkit is still in the early stage, and we are still improving it. The dimensions that we are looking at include
+ 1. More efficent dataloader, to support large-scale dataset.
+ 2. More efficent distributed training. Horovod has sub-linear speedup when it runs on the cross-machine distributed training mode, which could be improved.
+ 3. Lattice-free MMI, the state-of-the-art approach in Kaldi
+ 4. Joint frontend and backend optimization. 
+ 5. Support more neural network models
 
-An example of runing a sequence traing job is
- 
-  ```   
-python train_se.py -config configs/mmi.yaml \
-    -data configs/data.yaml \
-    -exp_dir exp/tr960_blstm_3x512_dp02 \
-    -criterion "mmi" \
-    -seed_model exp/tr960_blstm_3x512_dp02/model.7.tar \
-    -prior_path /datadisk2/lial/librispeech/s5/exp/tri6b_ali_tr960/final.occs \
-    -trans_model /datadisk2/lial/librispeech/s5/exp/tri6b_ali_tr960/final.mdl \
-    -den_dir /datadisk2/lial/librispeech/s5/exp/tri6b_denlats_960_cleaned/dengraph \
-    -lr 0.000001 \
-    -ce_ratio 0.1 \
-    -max_grad_norm 5 \
-    -batch_size 4 \
-  ```
+If you are intersted to contribute to this line of research, please contact Liang Lu (email address can be found in the arxiv paper). 
 
 ## Reference
 
-Liang Lu, Xiong Xiao, Zhuo Chen, Yifan Gong, "PyKaldi2: Yet another speech toolkit based on Kaldi and PyTorch", arxiv, 2019
+Liang Lu, Xiong Xiao, Zhuo Chen, Yifan Gong, "[PyKaldi2: Yet another speech toolkit based on Kaldi and PyTorch](https://arxiv.org/abs/1907.05955)", arxiv, 2019
