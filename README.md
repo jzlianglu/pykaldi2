@@ -4,7 +4,7 @@ PyKaldi2 is a speech toolkit that is built based on [Kaldi](http://kaldi-asr.org
 
 ## How to install
 
-PyKaldi2 runs on top of [Horovod](https://github.com/horovod/horovod) and PyKaldi libraries. The dockerfile is provided to customarize the envriorment. To use the repo, do the following three steps. 
+PyKaldi2 runs on top of the [Horovod](https://github.com/horovod/horovod) and PyKaldi libraries. The dockerfile is provided to customarize the envriorment. To use the repo, do the following three steps. 
 
 1. Clone the repo by
 
@@ -23,11 +23,19 @@ PyKaldi2 runs on top of [Horovod](https://github.com/horovod/horovod) and PyKald
     NV_GPU=0,1,2,3 nvidia-docker run -v `pwd`:`pwd` -w `pwd` --shm-size=32G -i -t horovod-pykaldi
   ```
 
-If you want to run multi-GPU jobs using Horovod, command is like
+If you want to run multi-GPU jobs using Horovod on a single machine,  the command is like
 
   ```
     horovodrun -np 4 -H localhost:4 sh run_ce.sh 
   ```
+Please refer to [Horovod](https://github.com/horovod/horovod) for running cross-machine distributed jobs. 
+
+## Training speed
+
+We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V100 GPUs. We used BLSTM acoustic models with 3 hidden layers and each layer has 512 hidden units. 
+
+| model | loss | batch_size| iRTF|
+ ------  ------ ----------- -----
 
 ## Cross-entropy training
 
