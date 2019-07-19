@@ -35,7 +35,7 @@ import pickle
 import torch as th
 import torch.nn as nn
 
-import feature
+import reader
 from data import SpeechDataset, ChunkDataloader, SeqDataloader
 from models import LSTMStack, NnetAM
 from utils import utils
@@ -46,7 +46,7 @@ def main():
     parser.add_argument("-exp_dir")
     parser.add_argument("-dataPath", default='', type=str, help="path of data files")
     parser.add_argument("-data")                                                                                
-    parser.add_argument("-lr", default=1, type=float, help="Override the LR in the config")     # is this default lr too big?
+    parser.add_argument("-lr", default=0.0001, type=float, help="Override the LR in the config")  
     parser.add_argument("-batch_size", default=32, type=int, help="Override the batch size in the config")                         
     parser.add_argument("-data_loader_threads", default=0, type=int, help="number of workers for data loading")
     parser.add_argument("-max_grad_norm", default=5, type=float, help="max_grad_norm for gradient clipping")                     
@@ -57,7 +57,7 @@ def main():
     parser.add_argument("-dropout", type=float, help="set the dropout ratio")                                        
     parser.add_argument("-aneal_lr_epoch", default=2, type=int, help="start to aneal the learning rate from this epoch")  # aneal -> anneal?
     parser.add_argument("-aneal_lr_ratio", default=0.5, type=float, help="the ratio to aneal the learning rate")
-    parser.add_argument('-p', '--print-freq', default=100, type=int,
+    parser.add_argument('-print-freq', default=100, type=int,
                     metavar='N', help='print frequency (default: 100)')
 
     args = parser.parse_args()
@@ -87,7 +87,7 @@ def main():
                                        global_mvn=args.global_mvn)
 
     if args.global_mvn:
-        transform = feature.preprocess.GlobalMeanVarianceNormalization()
+        transform = reader.preprocess.GlobalMeanVarianceNormalization()
         print("Estimating global mean and variance of feature vectors...")
         transform.learn_mean_and_variance_from_train_loader(train_dataloader,
                                                         train_dataloader.stream_keys_for_transform,
