@@ -4,7 +4,7 @@ We assume that you have run the Kaldi [Librispeech recipe](https://github.com/ka
 
 ## CE training
 
-The top-level script for CE training is **run\_ce.sh**, which is like 
+The bash script for CE training is **run\_ce.sh**, which is like 
 
   ```
     python ../../bin/train_ce.py -config configs/ce.yaml \
@@ -47,7 +47,7 @@ The *pdf-ids* are used for CE training, and *trans-ids* are used for SE training
 If you want to apply dynamic data simulation, you need to provide the noise and RIR sources such as
 
   ```
-   dir_noise:
+   dir\_noise:
     1:
       type: Noise
       wav: Path-to\noise.zip
@@ -57,4 +57,22 @@ If you want to apply dynamic data simulation, you need to provide the noise and 
       wav: Path-to\rir.zip
   ```
 
+## SE training
 
+The bash script for SE training is **run_se.sh**, which is like
+
+  ```
+   python ../../bin/train_se.py -config configs/se.yaml \
+    -data data.yaml \
+    -exp_dir /datadisk2/lial/release/exp/tr960_blstm_3x512_dp02/ \
+    -criterion "smbr" \
+    -seed_model /datadisk2/lial/release/exp/tr960_blstm_3x512_dp02/model.7.tar \
+    -prior_path /datadisk2/lial/librispeech/s5/exp/tri6b_ali_tr960/final.occs \
+    -trans_model /datadisk2/lial/librispeech/s5/exp/tri6b_ali_tr960/final.mdl \
+    -den_dir /datadisk2/lial/librispeech/s5/exp/tri6b_denlats_960_cleaned/dengraph \
+    -lr 0.000001 \
+    -ce_ratio 0.1 \
+    -max_grad_norm 5 \
+    -batch_size 4 \
+    -num_epochs 1  
+  ```
