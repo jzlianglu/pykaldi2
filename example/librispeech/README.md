@@ -63,7 +63,7 @@ The bash script for SE training is **run_se.sh**, which is like
 
   ```
    python ../../bin/train_se.py -config configs/se.yaml \
-    -data data.yaml \
+    -data configs/data.yaml \
     -exp_dir /datadisk2/lial/release/exp/tr960_blstm_3x512_dp02/ \
     -criterion "smbr" \
     -seed_model /datadisk2/lial/release/exp/tr960_blstm_3x512_dp02/model.7.tar \
@@ -76,3 +76,5 @@ The bash script for SE training is **run_se.sh**, which is like
     -batch_size 4 \
     -num_epochs 1  
   ```
+The *prior_path*, *trans\_model* and *den_dir* are from the Kaldi setup. 
+

@@ -1,11 +1,3 @@
-stft_config:
-    frame_rate: 16000
-    fft_size: 512
-    analysis_window: hanning
-    do_dither: True
-    dc_removal: False 
-    frame_len: 400
-    frame_shift: 160
 data_config:
     frame_len: 400
     frame_shift: 160
