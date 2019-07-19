@@ -8,9 +8,9 @@ PyKaldi2 runs on top of the [Horovod](https://github.com/horovod/horovod) and Py
 
 1. Clone the repo by
 
-   ```
+  ```
     git clone https://github.com/jzlianglu/pykaldi2.git
-   ```
+  ```
 2. Build the docker image, simply run
 
   ```
@@ -32,7 +32,7 @@ Please refer to [Horovod](https://github.com/horovod/horovod) for running cross-
 
 ## Training speed
 
-We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V100 GPUs. We used BLSTM acoustic models with 3 hidden layers and each layer has 512 hidden units. The table below shows the training speed in our experiments. iRTF means the inverted real time factor, i.e., the amount of data (in terms of hours) we can process per hour. The minibatch is of the shape as batch_size*seq_len*feat_dim. For CE training, the seq_len is 80, which means we cut the utterance into chunks of 80 frames. For MMI training, the sequence length is variable, so it is denoted as *.  
+We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V100 GPUs. We used BLSTM acoustic models with 3 hidden layers and each layer has 512 hidden units. The table below shows the training speed in our experiments. iRTF means the inverted real time factor, i.e., the amount of data (in terms of hours) we can process per hour. The minibatch is of the shape as batch-size x seq-len x feat-dim. For CE training, the seq-len is 80, which means we cut the utterance into chunks of 80 frames. For MMI training, the sequence length is variable, so it is denoted as *.  
 
 | model | loss | bsxlen    | #GPUs |iRTF |
 |------ | -----| ----------| ------|---- |
