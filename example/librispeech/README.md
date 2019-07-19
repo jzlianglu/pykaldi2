@@ -4,7 +4,7 @@ We assume that you have run the Kaldi [Librispeech recipe](https://github.com/ka
 
 ## CE training
 
-The top-level script for CE training is "run\_ce.sh", which is like 
+The top-level script for CE training is **run\_ce.sh**, which is like 
 
   ```
     python ../../bin/train_ce.py -config configs/ce.yaml \
@@ -37,7 +37,7 @@ The ce.yaml file contains the data and model configurations. The data.yaml file 
     aux_label: /datadisk2/lial/LibriSpeechWav/train-960-trans-ids.txt    
     label: /datadisk2/lial/LibriSpeechWav/train-960-pdf-ids.txt
   ```
-The zip files contains the raw waveforms, and {\tt trans-ids} and {\tt pdf-ids} are Kaldi labels in the form of transition ids and tied HMM pdf ids, which look like
+The zip files contains the raw waveforms, and *trans-ids* and *pdf-ids* are Kaldi labels in the form of transition ids and tied HMM pdf ids, which look like
 
   ```
    100-121669-0001 0 43 43 43 43 43 43 43 44 44 44 44 44 44 44 44 ...
