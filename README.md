@@ -48,7 +48,7 @@ We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V10
 
 ## Example
 
-To use PyKaldi2, you need to run the Kaldi speech toolkit up to the end of GMM training state. PyKaldi2 will rely on the alignments and the denominator graph from the GMM system for CE and SE training. An example of the Librispeech system is given in the [example](https://github.com/jzlianglu/pykaldi2/tree/master/example) directory. 
+To use PyKaldi2, you need to run the Kaldi speech toolkit up to the end of GMM training stages. PyKaldi2 will rely on the alignments and the denominator graph from the GMM system for CE and SE training. An example of the Librispeech system is given in the [example](https://github.com/jzlianglu/pykaldi2/tree/master/example) directory. 
 
 ## Future works
 
