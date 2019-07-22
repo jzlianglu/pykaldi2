@@ -44,7 +44,7 @@ We measured the training speed of PyKaldi2 on Librispeech dataset with Tesla V10
 |       | MMI  | 4 x *     | 1     | 16.7|
 |       | MMI  | 4 x *     | 4     | 34.5|
 |       | MMI  | 16 x *    | 4     | 50.4|
-
+|       | MMI  | 64 x *    | 16    | 176 |
 
 ## Example
 
