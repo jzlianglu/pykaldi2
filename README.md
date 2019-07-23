@@ -14,7 +14,7 @@ PyKaldi2 runs on top of the [Horovod](https://github.com/horovod/horovod) and Py
 2. Build the docker image, simply run
 
   ```
-    docker build -t horovod-pykaldi -f docker/Dockerfile 
+    docker build -t horovod-pykaldi docker 
   ```
 
 3. Activate the docker image, for example
