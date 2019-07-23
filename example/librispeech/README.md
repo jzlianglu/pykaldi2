@@ -42,7 +42,7 @@ The zip files contains the raw waveforms, and *trans-ids* and *pdf-ids* are Kald
   ```
    100-121669-0001 0 43 43 43 43 43 43 43 44 44 44 44 44 44 44 44 ...
   ``` 
-The *pdf-ids* are used for CE training, and *trans-ids* are used for SE training. In fact, given Kaldi transition model, we can convert *trans-ids* to *pdf-ids*, how this is slow in Python. Currently we use two versions of the labels. The labels are in plain text at the moment. We are working on supporting data and labels in the form of HDF5.
+The *pdf-ids* are used for CE training, and *trans-ids* are used for SE training. In fact, given the Kaldi transition model, we can convert *trans-ids* to *pdf-ids*, however this is slow in Python. Currently we use two versions of the labels. The labels are in plain text at the moment. We are working on supporting data and labels in the form of HDF5.
 
 If you want to apply dynamic data simulation, you need to provide the noise and RIR sources such as
 
