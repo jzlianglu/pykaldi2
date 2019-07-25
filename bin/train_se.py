@@ -137,12 +137,7 @@ def main():
     if os.path.isfile(args.seed_model):
         checkpoint = th.load(args.seed_model)                                            
         state_dict = checkpoint['model']                                            
-        from collections import OrderedDict
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:] # remove 'module.' of dataparallel
-            new_state_dict[name]=v
-        model.load_state_dict(new_state_dict)                                           
+        model.load_state_dict(state_dict)                                           
         print("=> loaded checkpoint '{}' ".format(args.seed_model))                      
     else:
         sys.stderr.write('ERROR: The model file %s does not exist!\n'%(model_file))
