@@ -63,11 +63,11 @@ def main():
 
     args = parser.parse_args()
 
-    with open(args.train_config_file) as f:
+    with open(args.train_config) as f:
         config = yaml.safe_load(f)
 
     config["sweep_size"] = args.sweep_size
-    with open(args.data_config_file) as f:
+    with open(args.data_config) as f:
         data = yaml.safe_load(f)
         config["source_paths"] = [j for i, j in data['clean_source'].items()]
         if 'dir_noise' in data:
