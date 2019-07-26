@@ -8,6 +8,7 @@ data_config:
     use_iso_noise: False
     use_dir_noise: False
     use_reverb: False
+    simulation_prob: 0
     use_cmn: True
     snr_min: 10
     snr_max: 20
@@ -24,5 +25,5 @@ decoder_config:
     lattice_beam: 7
     max_active: 7000
     acoustic_scale: 0.1
-    align_beam: 40
+    align_beam: 10
 
