@@ -37,7 +37,7 @@ import reader
 import os
 
 
-def utt2seg(data, seg_len, seg_shift):
+def _utt2seg(data, seg_len, seg_shift):
     """ Cut an utterance (MxN matrix) to segments. """
     if data.ndim == 1:
         data = np.reshape(data, (1, data.size))
@@ -93,13 +93,13 @@ class SpeechDataset(data.Dataset):
         # load the three types of source data
         dir_noise_streams = None
         if "dir_noise_paths" in config:
-            dir_noise_streams = self.load_streams(config["dir_noise_paths"], config['data_path'], is_speech=False)
+            dir_noise_streams = self._load_streams(config["dir_noise_paths"], config['data_path'], is_speech=False)
 
         rir_streams = None
         if "rir_paths" in config:
-            rir_streams = self.load_streams(config["rir_paths"], config['data_path'], is_speech=False, is_rir=True)
+            rir_streams = self._load_streams(config["rir_paths"], config['data_path'], is_speech=False, is_rir=True)
 
-        source_streams = self.load_streams(config["source_paths"], config['data_path'], is_speech=True)
+        source_streams = self._load_streams(config["source_paths"], config['data_path'], is_speech=True)
         self.source_stream_sizes = [i.get_number_of_data() for i in source_streams]
         if self.sequence_mode:
             self.source_stream_cum_sizes = [self.source_stream_sizes[0]]
@@ -128,7 +128,7 @@ class SpeechDataset(data.Dataset):
         self.sample_len_seconds = config["data_config"]["seg_len"] * 0.01 # default sampling rate: 100Hz
         self.stream_idx_for_transform = [0]
 
-    def load_streams(self, source_list, data_path, is_speech=True, is_rir=False):
+    def _load_streams(self, source_list, data_path, is_speech=True, is_rir=False):
         source_streams = list()
         for i in range(len(source_list)):
             corpus_type = source_list[i]['type']
@@ -145,15 +145,15 @@ class SpeechDataset(data.Dataset):
                 label_names.append('aux_label')
             else:
                 corpus_label_path = None
-            print("%s::load_streams: loading %s from %s..." % (self.__class__.__name__, corpus_type, corpus_wav_path))
-            curr_stream = reader.stream.gen_speech_stream_from_zip(corpus_wav_path,
-                                                               label_files=label_paths,
-                                                               label_names=label_names,
-                                                               is_speech_corpus=is_speech,
-                                                               is_rir=is_rir,
-                                                               get_duration=False,
-                                                               corpus_name=corpus_type,
-                                                               file_extension='wav')
+            print("%s::_load_streams: loading %s from %s..." % (self.__class__.__name__, corpus_type, corpus_wav_path))
+            curr_stream = reader.stream.gen_stream_from_zip(corpus_wav_path,
+                                                            label_files=label_paths,
+                                                            label_names=label_names,
+                                                            is_speech_corpus=is_speech,
+                                                            is_rir=is_rir,
+                                                            get_duration=False,
+                                                            corpus_name=corpus_type,
+                                                            file_extension='wav')
             source_streams.append(curr_stream)
 
         return source_streams
@@ -205,6 +205,9 @@ class SpeechDataset(data.Dataset):
 
 
 class DataGeneratorSequenceConfig:
+    """
+    Define the configurations of data generation.
+    """
     def __init__(self, use_reverb, use_noise, snr_range, n_hour_per_epoch=10, sequence_mode=False, load_label=True, min_seglen=0, seglen=500, segshift=500, use_cmn=False, gain_norm=False, simulation_prob=0.5):
         self.n_hour_per_epoch = n_hour_per_epoch
         self.load_label = load_label
@@ -223,9 +226,22 @@ class DataGeneratorSequenceConfig:
 
 
 class DataGeneratorTrain:
+    """
+    Generate simulated speech utterances from clean speech streams, noise streams, and rir streams. Responsible for
+    sampling of the data from the streams, and call SimpleSimulator to do the simulation. Also responsible for extract
+    features and make training samples.
+    """
     _window_file = 'mel80_window.txt'  # the file that stores the Mel scale window coefficients
 
     def __init__(self, source_streams, noise_streams, rir_streams, config, DEBUG=False):
+        """
+        :param source_streams: a list of SpeechDataStream objects, containing the clean speech source files names and
+        meta-data such as label, utterance ID, and speaker ID.
+        :param noise_streams: a list of DataStream objects, containing noise file names.
+        :param rir_streams: a list of RIRDataStream objects, containing RIR file names and meta data information.
+        :param config: an object of type DataGeneratorSequenceConfig
+        :param DEBUG: if set to DEBUG mode, will plot the filterbanks and label.
+        """
         self._source_streams = source_streams
         self._source_streams_prior = self._get_streams_prior(source_streams)
         self._rir_streams = rir_streams
@@ -256,7 +272,7 @@ class DataGeneratorTrain:
             lines = [line.rstrip('\n') for line in file]
         self._window = np.vstack([np.asarray([np.float32(j) for j in i.split(",")]) for i in lines])
 
-    def logfbank_extractor(self, wav):
+    def _logfbank_extractor(self, wav):
         # typical log fbank extraction for 16kHz speech data
         preemphasis = 0.96
 
@@ -276,6 +292,12 @@ class DataGeneratorTrain:
         return log_fbank
 
     def generate(self, index=None):
+        """
+
+        :param index: a tuple of 2 entries (source_stream_idx, utt_idx) that specifies which clean source file to use
+        for simulation. If not provided, will randomly choose one clean source file from the clean source streams.
+        :return: a list of training samples
+        """
         seg_len = self._config.segment_config['seglen']
         seg_shift = self._config.segment_config['segshift']
 
@@ -318,7 +340,7 @@ class DataGeneratorTrain:
                                                                            dir_noise_rirs=noise_rirs,
                                                                            gen_mask=False, normalize_gain=self._config.gain_norm)
 
-        fbank = self.logfbank_extractor(simulated_wav[:,0])
+        fbank = self._logfbank_extractor(simulated_wav[:,0])
 
         if self._config.load_label:
             _, label = self._source_streams[source_stream_idx].read_label_with_id(utt_id)
@@ -345,12 +367,12 @@ class DataGeneratorTrain:
             else:
                 train_samples = [(fbank, utt_id)]
         else: 
-            fbank_seg = utt2seg(fbank.T, seg_len, seg_shift)
+            fbank_seg = _utt2seg(fbank.T, seg_len, seg_shift)
             if len(fbank_seg) == 0:
                 return []
 
             if self._config.load_label:
-                label_seg = utt2seg(frame_label.T, seg_len, seg_shift)
+                label_seg = _utt2seg(frame_label.T, seg_len, seg_shift)
                 train_samples = [(fbank_seg[i].T, utt_id, label_seg[i].T) for i in range(len(label_seg))]
             else:
                 train_samples = [(fbank_seg[i].T, utt_id) for i in range(len(fbank_seg))]

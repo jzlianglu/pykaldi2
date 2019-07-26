@@ -511,7 +511,7 @@ def gen_speech_stream_from_list(wav_list, utt2spk, get_duration=True, use_zip=Tr
     return speech_stream
 
 
-def gen_speech_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_names=None, utt2spk=None,
+def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_names=None, utt2spk=None,
                                corpus_name=None, is_speech_corpus=True, is_rir=False, get_duration=False):
     """ Generate speech stream from zip file and utt2spk. The zip file contains wavfiles.
     Parameters
