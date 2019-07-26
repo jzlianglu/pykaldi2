@@ -64,7 +64,7 @@ def _get_hoth_mag(samp_rate, fft_size):
         f = interp.interp1d(hoth_w[0:_hoth_index_4000_hz + 1], hoth_mag[0:_hoth_index_4000_hz + 1], kind='cubic', bounds_error=False,
                             fill_value=(hoth_mag[0], hoth_mag[_hoth_index_4000_hz + 1]))
     else:
-        RuntimeError('Can only generate Hoth noise for 16000 sampling rates!')
+        RuntimeError('Can only generate Hoth noise for 16000 hz or 8000 hz sampling rates!')
 
     w = 2 * np.pi * np.arange(0, fft_size_by_2 + 1, 1) / fft_size
 
