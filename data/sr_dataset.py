@@ -31,8 +31,10 @@ from multiprocessing import Queue
 import zipfile
 import io
 import json 
-import simulation as simu
+from simulation import SimpleSimulator, imagesc
+from simulation.freq_analysis import stft
 import reader
+import os
 
 
 def utt2seg(data, seg_len, seg_shift):
@@ -104,31 +106,24 @@ class SpeechDataset(data.Dataset):
             for i in range(1, len(self.source_stream_sizes)):
                 self.source_stream_cum_sizes.append(self.source_stream_cum_sizes[-1] + self.source_stream_sizes[i])
 
-        # Simulation layer: set up the simulator
-        # get the single channel single source simulation configuration
-        use_reverb = config["data_config"]["use_reverb"]
-        use_noise = config["data_config"]["use_dir_noise"]
-        snr_range = [config["data_config"]["snr_min"], config["data_config"]["snr_max"]]
-        cfg_simu = simu.config.single_channel_single_source_config(use_reverb=use_reverb,
-                                                                   use_noise=use_noise,
-                                                                   snr_range=snr_range)
-
-        simulator = simu.Simulator(cfg_simu, source_streams, noise_streams=dir_noise_streams, rir_streams=rir_streams)
-
         generator_config = DataGeneratorSequenceConfig(
+            use_reverb=config["data_config"]["use_reverb"],
+            use_noise=config["data_config"]["use_dir_noise"],
+            snr_range=[config["data_config"]["snr_min"], config["data_config"]["snr_max"]],
             n_hour_per_epoch=config["sweep_size"],
             sequence_mode=self.sequence_mode,
             load_label=config["data_config"]["load_label"],
             seglen=config["data_config"]["seg_len"], 
             segshift=config["data_config"]["seg_shift"],
-            use_cmn=config["data_config"]["use_cmn"]
+            use_cmn=config["data_config"]["use_cmn"],
+            simulation_prob=config['data_config']['simulation_prob']
         )
 
-        data_generator = DataGeneratorTrain(simulator, generator_config, DEBUG=False)
+        data_generator = DataGeneratorTrain(source_streams, dir_noise_streams, rir_streams, generator_config, DEBUG=False)
         if self.sequence_mode:
             self.data_buffer = data_generator
         else:
-            self.data_buffer = DataBuffer(data_generator, buffer_size=20000, preload_size=200, randomize=True)
+            self.data_buffer = DataBuffer(data_generator, buffer_size=200, preload_size=200, randomize=True)
 
         self.sample_len_seconds = config["data_config"]["seg_len"] * 0.01 # default sampling rate: 100Hz
         self.stream_idx_for_transform = [0]
@@ -210,10 +205,13 @@ class SpeechDataset(data.Dataset):
 
 
 class DataGeneratorSequenceConfig:
-    def __init__(self, n_hour_per_epoch=10, sequence_mode=False, load_label=True, min_seglen=0, seglen=500, segshift=500, use_cmn=False, gain_norm=False):
+    def __init__(self, use_reverb, use_noise, snr_range, n_hour_per_epoch=10, sequence_mode=False, load_label=True, min_seglen=0, seglen=500, segshift=500, use_cmn=False, gain_norm=False, simulation_prob=0.5):
         self.n_hour_per_epoch = n_hour_per_epoch
         self.load_label = load_label
         self.segment_config = {}
+        self.use_reverb = use_reverb
+        self.use_noise = use_noise
+        self.snr_range = snr_range
         self.segment_config['sequence_mode'] = sequence_mode
         self.segment_config['seglen'] = seglen   # length of segments in terms of frames
         self.segment_config['segshift'] = segshift
@@ -221,39 +219,109 @@ class DataGeneratorSequenceConfig:
         self.n_segment_per_epoch = int(3600 * n_hour_per_epoch / self.segment_config['seglen'] * 100)
         self.gain_norm = gain_norm
         self.use_cmn = use_cmn
+        self.simulation_prob = simulation_prob
 
 
 class DataGeneratorTrain:
-    def __init__(self, single_source_simulator, config, DEBUG=False):
-        self.data_len = config.n_segment_per_epoch
-        self.DEBUG = DEBUG
-        self.single_source_simulator = single_source_simulator
-        self.analyzer = self.single_source_simulator.analyzer
-        self.config = config
+    _window_file = 'mel80_window.txt'  # the file that stores the Mel scale window coefficients
 
-    def generate(self, index=None, n_sample=1):
-        seg_len = self.config.segment_config['seglen']
-        seg_shift = self.config.segment_config['segshift']
-        analyzer = self.single_source_simulator.analyzer
-        min_len_sample = seg_len*analyzer.frame_shift+analyzer.frame_overlap
+    def __init__(self, source_streams, noise_streams, rir_streams, config, DEBUG=False):
+        self._source_streams = source_streams
+        self._source_streams_prior = self._get_streams_prior(source_streams)
+        self._rir_streams = rir_streams
+        self._rir_streams_prior = self._get_streams_prior(rir_streams)
+        self._noise_streams = noise_streams
+        self._noise_streams_prior = self._get_streams_prior(noise_streams)
+
+        self._data_len = config.n_segment_per_epoch
+        self._single_source_simulator = SimpleSimulator(use_rir=config.use_reverb, use_noise=config.use_noise, snr_range=config.snr_range)
+        self._config = config
+        self._DEBUG = DEBUG
+        self._gen_window()
+
+    def _get_streams_prior(self, streams):
+        if streams is None:
+            return None
+        else:
+            n_entrys = np.asarray([stream.get_number_of_data() for stream in streams])
+            return n_entrys / np.sum(n_entrys)
+
+    def _gen_window(self):
+        # load the pre-computed window coefficients for 80D log filterbanks used in typical acoustic modeling.
+        # the window is computed by the following code
+        # import librosa
+        # self._window = librosa.filters.mel(16000, 512, n_mels=80, fmax=7690, htk=True)
+        mel_file = os.path.join(os.path.dirname(__file__), self._window_file)
+        with open(mel_file) as file:
+            lines = [line.rstrip('\n') for line in file]
+        self._window = np.vstack([np.asarray([np.float32(j) for j in i.split(",")]) for i in lines])
+
+    def logfbank_extractor(self, wav):
+        # typical log fbank extraction for 16kHz speech data
+        preemphasis = 0.96
+
+        t1 = np.sum(self._window, 0)
+        t1[t1 == 0] = -1
+        inv = np.diag(1 / t1)
+        mel = self._window.dot(inv).T
+
+        wav = wav[1:] - preemphasis * wav[:-1]
+        S = stft(wav, n_fft=512, hop_length=160, win_length=400, window=np.hamming(400), center=False).T
+
+        spec_mag = np.abs(S)
+        spec_power = spec_mag ** 2
+        fbank_power = spec_power.T.dot(mel * 32768 ** 2) + 1
+        log_fbank = np.log(fbank_power)
+
+        return log_fbank
+
+    def generate(self, index=None):
+        seg_len = self._config.segment_config['seglen']
+        seg_shift = self._config.segment_config['segshift']
 
         if index is None:       # if no index is given, let the simulator do random sampling
-            mixed_wav, early_reverb, mask, config = self.single_source_simulator.simulate(min_length=min_len_sample, normalize_gain=self.config.gain_norm, gen_mask=False)
+            # sample a clean speech stream
+            source_stream_idx = np.random.choice(np.arange(len(self._source_streams)), replace=True, p=self._source_streams_prior)
+            # sample a clean speech utterance
+            _, utt_id, source_wav, _ = self._source_streams[source_stream_idx].sample_spk_and_utt(n_spk=1,
+                                                                                                  n_utt_per_spk=1,
+                                                                                                  load_data=True)
         else:    # if index is given, use the specified sentence
             assert len(index) == 2
-            sent_config = dict()
-            sent_config['n_source'] = 1
-            sent_config['source_stream_idx'] = index[0]
-            sent_config['source_utt_id'] = [self.single_source_simulator.speech_streams[index[0]].utt_id[index[1]]]
-            sent_config['source_speakers'] = [self.single_source_simulator.speech_streams[index[0]].utt2spk[sent_config['source_utt_id'][0]]]
-            mixed_wav, early_reverb, mask, config = self.single_source_simulator.simulate(sent_config=sent_config, normalize_gain=self.config.gain_norm)
+            source_stream_idx = index[0]
+            utt_id = [self._source_streams[source_stream_idx].utt_id[index[1]]]
+            _, _, source_wav, _ = self._source_streams[source_stream_idx].read_utt_with_id(source_utt_id, load_data=True)
 
-        speech_stream = self.single_source_simulator.speech_streams[config['source_stream_idx']]
-        fbank = simu.feature.logfbank80(mixed_wav[:,0])
-        utt_id = config['source_utt_id']
+        if np.random.random() > self._config.simulation_prob:
+            simulated_wav = source_wav[0]
+        else:
+            if self._noise_streams is None:
+                noise_wavs = None
+            else:
+                noise_stream_idx = np.random.choice(np.arange(len(self._noise_streams)), replace=True,
+                                                p=self._noise_streams_prior)
+                noise_wavs, noise_files = self._noise_streams[noise_stream_idx].sample_data()
+    
+            if self._rir_streams is None:
+                source_rir = None
+                noise_rirs = None
+            else:
+                rir_stream_idx = np.random.choice(np.arange(len(self._rir_streams)), replace=True, p=self._rir_streams_prior)
+                n_rir = 1 if noise_wavs is None else 1+len(noise_wavs)
+                rir_wav, room_size, array_position, positions, t60 = self._rir_streams[rir_stream_idx].sample_rir(n_rir)
+                source_rir = rir_wav[0]
+                noise_rirs = rir_wav[1:]
+    
+            simulated_wav, _, mask, config = self._single_source_simulator(source_wav[0],
+                                                                           dir_noise_wavs=noise_wavs,
+                                                                           source_rir=source_rir,
+                                                                           dir_noise_rirs=noise_rirs,
+                                                                           gen_mask=False, normalize_gain=self._config.gain_norm)
 
-        if self.config.load_label:
-            _, label = speech_stream.read_label_with_id(config['source_utt_id'])
+        fbank = self.logfbank_extractor(simulated_wav[:,0])
+
+        if self._config.load_label:
+            _, label = self._source_streams[source_stream_idx].read_label_with_id(utt_id)
             frame_label = label['label'][0].T
             if 'aux_label' in label:
                 aux_label = label['aux_label']
@@ -267,33 +335,35 @@ class DataGeneratorTrain:
             frame_label = frame_label[:n_fr,:]
             fbank = fbank[:n_fr,:]
 
-        if self.config.use_cmn:
+        if self._config.use_cmn:
             fbank = reader.preprocess.cmn(fbank, axis=0)
 
-        if self.config.segment_config['sequence_mode']:
-            if self.config.load_label:
+        if self._config.segment_config['sequence_mode']:
+            if self._config.load_label:
                 train_samples = [(fbank, utt_id, frame_label, aux_label)]
             else:
                 train_samples = [(fbank, utt_id)]
         else: 
             fbank_seg = utt2seg(fbank.T, seg_len, seg_shift)
+            if len(fbank_seg) == 0:
+                return []
 
-            if self.config.load_label:
+            if self._config.load_label:
                 label_seg = utt2seg(frame_label.T, seg_len, seg_shift)
                 train_samples = [(fbank_seg[i].T, utt_id, label_seg[i].T) for i in range(len(label_seg))]
             else:
                 train_samples = [(fbank_seg[i].T, utt_id) for i in range(len(fbank_seg))]
         
-            if self.DEBUG:
+            if self._DEBUG:
                 import matplotlib.pyplot as plt
                 n_sample = len(train_samples)
                 for i in range(n_sample):
                     plt.subplot(n_sample,2,i*2+1)
-                    simu.imagesc(train_samples[i][0].T)
+                    imagesc(train_samples[i][0].T)
                     plt.subplot(n_sample,2,i*2+2)
                     plt.plot(train_samples[i][2])
 
         return train_samples
 
     def get_len(self):
-        return self.data_len
+        return self._data_len

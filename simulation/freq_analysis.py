@@ -6,18 +6,7 @@ import six
 import os
 
 
-_use_stored_window=True
-if _use_stored_window: # load the pre-computed window coefficients for 80D log filterbanks used in typical acoustic modeling.
-    mel_file = os.path.join(os.path.dirname(__file__), 'mel80_window.txt')
-    with open(mel_file) as file:
-        lines = [line.rstrip('\n') for line in file]
-    mel80_window = np.vstack([np.asarray([np.float32(j) for j in i.split(",")]) for i in lines])
-else:   # you can generate new window if you want different configurations to the window.
-    import librosa
-    mel80_window = librosa.filters.mel(16000, 512, n_mels=80, fmax=7690, htk=True)
-
-
-def get_window(window, wlen):
+def _get_window(window, wlen):
     if type(window) == str:
         # types:
         # boxcar, triang, blackman, hamming, hann, bartlett, flattop, parzen,
@@ -121,8 +110,20 @@ def _enframe(x, shift, length, axis_t=-1, newaxis_t=-1, newaxis_b=-2,
         raise
 
 
-def stft(y, n_fft=2048, hop_length=None, win_length=None, window=None, center=False, do_dither=False,
-         dtype=np.complex64):
+def stft(y, n_fft=2048, hop_length=None, win_length=None, window='hamming', center=False, do_dither=False, dtype=np.complex64):
+    """
+    Perform short-time Fourier transform to input signal.
+
+    :param y: input signal, usually a 1D numpy array.
+    :param n_fft: FFT size
+    :param hop_length: window shift in terms of number of samples
+    :param win_length: window size in terms of number of samples
+    :param window: window type, default is 'hamming'
+    :param center: whether to pad zeros to the beginning and ending of the input.
+    :param do_dither: whether to add small amount of noise to signal to avoid absolute zero
+    :param dtype: type of output data.
+    :return:
+    """
     # By default, use the entire frame
     if win_length is None:
         win_length = n_fft
@@ -131,14 +132,11 @@ def stft(y, n_fft=2048, hop_length=None, win_length=None, window=None, center=Fa
     if hop_length is None:
         hop_length = int(win_length / 3)
 
-    if window is None:
-        window = 'hamming'
-
     if center:
         assert y.ndim == 1
         y = np.pad(y, win_length-hop_length, mode='constant')
 
-    fft_window = get_window(window, win_length)
+    fft_window = _get_window(window, win_length)
 
     nrfft = int(n_fft // 2) + 1
 
@@ -166,13 +164,11 @@ def istft(stft_matrix, hop_length=None, win_length=None, window=None, center=Fal
     >>> istft(y, hop_length=3, win_length=5, center=True, output_len=sig_len, method='vectorized')
     array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9.], dtype=float32)
 
-    :param stft_matrix:
-    :param hop_length:
-    :param win_length:
-    :param window:
-    :param center:
-    :param dtype:
-    :param method:
+    :param stft_matrix: MxN matrix, where M is the number of frames, and N is nfft/2+1
+    :param hop_length: window shift in terms of number of samples
+    :param win_length: window size in terms of number of samples
+    :param window: window type, default is 'hamming'
+    :param center: whether zeros was padded to the beginning and ending of the input waveform when calling stft.
     :return:
     '''
     n_fft = 2 * (stft_matrix.shape[1] - 1)
@@ -188,7 +184,7 @@ def istft(stft_matrix, hop_length=None, win_length=None, window=None, center=Fal
     if window is None:
         window = 'hamming'
 
-    fft_window = get_window(window, win_length)
+    fft_window = _get_window(window, win_length)
 
     if fft_window.size > n_fft:
         raise Exception('Size mismatch between n_fft={} and window size={}'.format(n_fft, fft_window.size))
@@ -232,14 +228,11 @@ def istft(stft_matrix, hop_length=None, win_length=None, window=None, center=Fal
     return y
 
 
-# maps a tensor of phases to values between -pi and pi
-def map_to_primal(x):
-    mults = np.round(x / (2 * np.pi))
-    x -= mults * 2.0 * np.pi
-    return x
-
-
 class SpectrumAnalyzer:
+    """
+    Perform short-time Fourier transform spectrum analysis to input speech signals. Also can synthesize waveform from
+    STFT coefficients.
+    """
     def __init__(self, config=None, fs=16000, fft_size=512, frame_len=400, frame_shift=160, window='hamming', do_dither=True, dc_removal=False, use_gpu=False):
         self.fs = fs
         self.fft_size = fft_size
@@ -273,31 +266,4 @@ class SpectrumAnalyzer:
         return y
 
 
-def logfbank80(wav):
-    # extract the 80D filterbank features from 16kHz speech signal that is popular for acoustic modeling.
 
-    preemphasis = 0.96
-    global mel80_window
-
-    t1 = np.sum(mel80_window, 0)
-    t1[t1 == 0] = -1
-    inv = np.diag(1 / t1)
-    mel = mel80_window.dot(inv).T
-
-    wav = wav[1:] - preemphasis * wav[:-1]
-    S = stft(wav, n_fft=512, hop_length=160, win_length=400, window=np.hamming(400), center=False).T
-
-    spec_mag = np.abs(S)
-    spec_power = spec_mag ** 2
-    fbank_power = spec_power.T.dot(mel * 32768 ** 2) + 1
-    log_fbank = np.log(fbank_power)
-
-    # Debug code
-    '''import matplotlib.pyplot as plt
-    import feature_io
-    feat_from_feconvert = feature_io.HTKFeat_read(mfcfile).getall()
-    plt.figure()
-    plt.imshow(np.vstack([S4[:500, :].T, feat_from_feconvert[:500, :].T, feat_from_feconvert[:500, :].T - S4[:500, :].T]))
-    '''
-
-    return log_fbank

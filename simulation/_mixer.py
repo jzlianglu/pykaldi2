@@ -1,13 +1,39 @@
 import numpy as np
-from .sampling import get_distribution_template, get_sample
+from . import _sampling
+
+
+class MixerConfig:
+    """
+    Configurations on mixing two speech sources.
+    """
+    def __init__(self):
+        self.config = dict()
+        self.config['mixed_length'] = {}
+        self.config['mixed_length']['scheme'] = 'longest_source'
+        self.config['mixed_length']['min'] = 5
+        self.config['positioning'] = {}
+        self.config['positioning']['scheme'] = 'random_start'
+        self.config['ref_source'] = 'first_source'
+        self.config['spr'] = _sampling.get_distribution_template(
+            'distribution of signal power ratio (SPR) between the speech sources',
+            max=2.5, min=-2.5, distribution='uniform')
 
 
 class Mixer:
+    """
+    Mixes two speech signals to simulate overlapping speech.
+    """
     def __init__(self, config):
         self.config = config
 
     def mix_signals(self, signals, spr=None, signal2=None):
-
+        """
+        :param signals: list of numpy arrays, each represent the waveform of one speech source
+        :param spr: speaker-to-interference ratio, the energy ratio between the two speakers.
+        :param signal2: optimal second set of signals that have one-to-one correspondence with signals. If provided,
+        will scale and shift it in the same way as signal.
+        :return: mixed speech and related settings
+        """
         # get the size of the sources
         signal_sizes = np.asarray([np.shape(x) for x in signals])
         n_ch = signal_sizes[0, 1]
@@ -22,11 +48,11 @@ class Mixer:
         if spr is None:
             spr = get_sample(self.config['spr'], signal_sizes.shape[0]-1)
 
-        scale = self.compute_source_scales(signals, spr)
+        scale = self._compute_source_scales(signals, spr)
 
         #
         if self.config['positioning']['scheme'] == 'random_start':
-            mixed, positioned_source, start_sample_idx = self.mix_by_random_start(signals, mixed_length, scale)
+            mixed, positioned_source, start_sample_idx = self._mix_by_random_start(signals, mixed_length, scale)
         else:
             raise Exception("Mixer::mix_signals: Unknown mixing scheme %s" % (self.config['positioning']['scheme']))
 
@@ -39,7 +65,8 @@ class Mixer:
         else:
             return mixed, positioned_source, start_sample_idx, scale
 
-    def compute_source_scales(self, signals, spr):
+    def _compute_source_scales(self, signals, spr):
+        """Compute the scales of the sources according to the SPR."""
         if self.config['ref_source'] == 'first_source':
             spr = np.insert(spr, 0, 0)
             ref_sig = signals[0]
@@ -55,11 +82,7 @@ class Mixer:
 
         return scale
 
-    def sample_mixture_length(self):
-        """Determine the length of the mixed signal"""
-        pass
-
-    def mix_by_random_start(self, signals, mixed_length, scale):
+    def _mix_by_random_start(self, signals, mixed_length, scale):
         """Given the duration of the mixed signal, sample a starting point for every signals"""
         source_sizes = np.asarray([np.shape(x) for x in signals])
         n_ch = source_sizes[0,1]
@@ -83,11 +106,11 @@ class Mixer:
 
         return mixed, positioned_source, start_sample_idx
 
-    def mix_by_repeat_short(self, signals, mixed_length, scale):
+    def _mix_by_repeat_short(self, signals, mixed_length, scale):
         """Given the duration of the mixed signal, repeat signals that are shorter than the length then randomly sample
         one segment from the repeated signal."""
-        pass
+        pass # to be implemented
 
-    def mix_by_cut_long(self, signals, mixed_length):
+    def _mix_by_cut_long(self, signals, mixed_length):
         """Given the duration of the mixed signal, cut the signals that are too long to fit the mixed length."""
-        pass
+        pass # to be implemented

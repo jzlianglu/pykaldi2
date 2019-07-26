@@ -1,37 +1,25 @@
 import numpy as np
-import scipy
+import logging
+from ._geometry import Rectangle
 
 
-def euclidean_distance(A, B):
-    """
-    compute euclidean distance between points in A and B. Both A and B are matrix of shape DxN. D is the dimension.
-    N can be different between A and B
-    """
-    if A.ndim > 2 or B.ndim > 2:
-        raise Exception("Cannot handle tensor")
-
-    if A.ndim == 0 or B.ndim == 0:  # if one input is scalar
-        return np.abs(A - B)
-
-    if A.ndim == 1 and B.ndim == 1:
-        return scipy.spatial.distance.euclidean(A, B)
-
-    if A.ndim == 1 and B.ndim == 2:  # if input is 1D array, force it to be 2D matrix
-        A.reshape(A.size, 1)
-        return np.sqrt(np.sum((A - B) ** 2, axis=0))
-
-    if B.ndim == 1 and A.ndim == 2:
-        B.reshape(B.size, 1)
-        return np.sqrt(np.sum((A - B) ** 2, axis=0))
-
-    # if both A and B are matrix
-    A2 = A.reshape(A.shape[0], 1, A.shape[1])
-    B2 = B.reshape(B.shape[0], B.shape[1], 1)
-    return np.sqrt(np.sum((A2 - B2) ** 2, axis=0))
+log = logging.getLogger(__name__)
 
 
 def get_distribution_template(comment, max=3.0, min=1.0, mean=None, std=None, category=None, pmf=None,
                               distribution='uniform'):
+    """
+    Produce a template for distribution.
+    :param comment: description of the distribution
+    :param max: max value of the distribution
+    :param min: min value of the distribution
+    :param mean: mean value of the distribution
+    :param std: standard deviation of the distribution
+    :param category: category of discrete distribution
+    :param pmf: probability mass function of discrete distribution
+    :param distribution: type of distribution.
+    :return: a dictionary that defines a distribution.
+    """
     assert(max>=min)
     template = {'comment': comment + ', mean/std needed if distribution=gaussian', 'max': max, 'min': min, 'mean': mean,
                 'std': std, 'category': category, 'pmf': pmf, 'distribution': distribution}
@@ -39,7 +27,12 @@ def get_distribution_template(comment, max=3.0, min=1.0, mean=None, std=None, ca
 
 
 def get_sample(config, n_sample=1):
-
+    """
+    Sample values from a defined distribution.
+    :param config: a distribution template dictionary produced by get_distribution_template()
+    :param n_sample: number of samples to produce
+    :return: sampled values
+    """
     if config['distribution'] == 'binary':
         data = np.random.choice([0, 1], size=n_sample, replace=True, p=config['pmf'])
 
@@ -48,7 +41,6 @@ def get_sample(config, n_sample=1):
 
     elif config['distribution'] == 'uniform':
         assert float(config['min']) < float(config['max'])
-        #print("min = %f, max = %f, n_sample = %d " % (float(config['min']), float(config['max']), n_sample))
         data=np.random.uniform(low=float(config['min']),high=float(config['max']),size=n_sample)
 
     elif config['distribution'] == 'gaussian':
@@ -63,13 +55,13 @@ def get_sample(config, n_sample=1):
             data=np.random.randint(int(config['min']),high=int(config['max']),size=n_sample)
 
     else:
-        print('Warning: unknown distribution type: %s' % config['distribution'])
+        log.warning('Warning: unknown distribution type: %s' % config['distribution'])
         data = []
 
     return data
 
 
-class Sampler(object):
+class _Sampler(object):
     def __init__(self, description):
         self.description = description
 
@@ -87,7 +79,8 @@ class Sampler(object):
         pass    # to be printed by subclasses
 
 
-class UniformSampler(Sampler):
+class UniformSampler(_Sampler):
+    """Sampler from uniform distribution. """
     def __init__(self, max=1.0, min=0.0, description="Uniform sampler"):
         super().__init__(description)
         self.max = float(max)
@@ -102,7 +95,8 @@ class UniformSampler(Sampler):
         return "Range = [%f, %f]" % (self.min, self.max)
 
 
-class UniformIntSampler(Sampler):
+class UniformIntSampler(_Sampler):
+    """Sampler from uniform integer distribution. """
     def __init__(self, max=1, min=0, description="Uniform integer sampler"):
         super().__init__(description)
         self.max = int(max)
@@ -120,7 +114,8 @@ class UniformIntSampler(Sampler):
         return "Range = [%d, %d]" % (self.min, self.max)
 
 
-class GaussianSampler(Sampler):
+class GaussianSampler(_Sampler):
+    """Gaussian sampler with min/max limits."""
     def __init__(self, mean=0.0, std=1.0, max=None, min=None, description="Gaussian sampler"):
         super().__init__(description)
         self.mean = mean
@@ -151,9 +146,9 @@ class GaussianSampler(Sampler):
             if n_valid_collected>= n_sample:
                 break
             if j > 100 and j % 100 == 0:
-                print("Simulator::sample_array_position: Warning: cannot find a suitable value after %d tries." % j)
+                log.warning("Simulator::sample_array_position: Warning: cannot find a suitable value after %d tries." % j)
         if n_valid_collected < n_sample:
-            print("Simulator::sample_array_position: Warning: only %d valid samples collected after %d tries." %(n_valid_collected, j))
+            log.warning("Simulator::sample_array_position: Warning: only %d valid samples collected after %d tries." %(n_valid_collected, j))
         elif n_valid_collected > n_sample:
             data = data[:n_sample]
 
@@ -168,7 +163,9 @@ class GaussianSampler(Sampler):
             lines.append("Minimum is %f" % self.min)
         return "\n".join(lines)
 
-class DiscreteSampler(Sampler):
+
+class DiscreteSampler(_Sampler):
+    """Sampler from a discrete/categorical distribution. """
     def __init__(self, category, pmf, description="Discrete random variable sampler"):
         super().__init__(description)
         self.category = category
@@ -188,11 +185,17 @@ class DiscreteSampler(Sampler):
 
 
 class BinarySampler(DiscreteSampler):
+    """Sampler from a binary distribution."""
     def __init__(self, prob=0.5, description="Binary variable sampler"):
         super().__init__([0, 1], [1-prob, prob], description)
 
 
 def sample_room(config):
+    """
+    Sampling room length, width, and height.
+    :param config: a dictionary defined in RoomConfig.
+    :return: a 1D array containing the length, width, and height of the room.
+    """
     room = np.zeros((3,))
     room[0] = get_sample(config['length'], n_sample=1)[0]
     room[1] = get_sample(config['width'], n_sample=1)[0]
@@ -201,6 +204,16 @@ def sample_room(config):
 
 
 def sample_array_position(config, room_size, use_gaussian=False):
+    """
+    Sample the position of the array center
+    :param config: the configuration of array positioning defined in ArrayPositionConfig
+    :param room_size: 1D array of room sizes
+    :param use_gaussian: whether to use Gaussian distribution
+    :return: a dictionary that contains two entries: array_ctr and mic_position
+        array_ctr is a 1D array of the xyz coordinates of the array's center point.
+        mic_position is a 3xC matrix, where C is the number of microphones, and each column is the xyz coordinates of a
+        microphone
+    """
     array_ctr = np.zeros((3,))
     if use_gaussian:
         name = ['length_ratio', 'width_ratio', 'height_ratio']
@@ -225,13 +238,12 @@ def sample_array_position(config, room_size, use_gaussian=False):
 
 
 def sample_source_position(config, room_size, array_center):
+    """Sample the positions of the sound sources. """
     # sample the number of speakers
     n_spk = get_sample(config['num_spk'])
     n_spk = n_spk[0]
 
-    if config['position_scheme'] == "minimum_angle":
-        source_position, _ = self.sample_source_position_by_min_angle(config, n_spk, room_size, array_center)
-    elif config['position_scheme'] == "random_coordinate":
+    if config['position_scheme'] == "random_coordinate":
         source_position = sample_source_position_by_random_coordinate(config, n_spk, room_size, array_center)
     else:
         raise Exception("Unknown speech source position scheme: %s" % config['position_scheme'])
@@ -240,11 +252,20 @@ def sample_source_position(config, room_size, array_center):
 
 
 def sample_source_position_by_random_coordinate(config, n_spk, room_size, array_center, forbidden_rect=None):
+    """
+    Sample positions of sound sources by uniformly sampling their 3D coordinates in the room.
+    :param config: A configuration defined as in SoundSourceConfig
+    :param n_spk: number of speakers
+    :param room_size: 1D array containing room sizes
+    :param array_center: 1D array containing xyz coordinates of microphone array center
+    :param forbidden_rect: a region where we should not sample positions
+    :return:
+    """
     source_position = np.zeros((3, n_spk))
 
-    d_from_wall = config['min_dist_from_wall'] if "min_dist_from_wall" in config.keys() else [0.0, 0.0]
-    d_from_array = config['min_dist_from_array'] if "min_dist_from_array" in config.keys() else 0.1
-    d_from_other = config['min_dist_from_other'] if "min_dist_from_other" in config.keys() else 0.2
+    d_from_wall = config['min_dist_from_wall'] if "min_dist_from_wall" in config.keys() else [0.0, 0.0] # minimum distance from wall
+    d_from_array = config['min_dist_from_array'] if "min_dist_from_array" in config.keys() else 0.1     # minimum distnace from mic array
+    d_from_other = config['min_dist_from_other'] if "min_dist_from_other" in config.keys() else 0.2     # minimum distance from other sources
     x_distribution = get_distribution_template("comment", min=d_from_wall[0],
                                                          max=room_size[0] - d_from_wall[0])
     y_distribution = get_distribution_template("comment", min=d_from_wall[0],
@@ -257,124 +278,21 @@ def sample_source_position_by_random_coordinate(config, n_spk, room_size, array_
     for i in range(n_spk):
         cnt = 0
         while 1:
-            x = get_sample(x_distribution)
-            y = get_sample(y_distribution)
-            z = get_sample(z_distribution)
+            cnt += 1
+            x = get_sample(x_distribution)[0]
+            y = get_sample(y_distribution)[0]
+            z = get_sample(z_distribution)[0]
             curr_pos = np.asarray([x, y, z])
-            if euclidean_distance(curr_pos[:2], array_center[:2]) >= d_from_array:
-                if forbidden_rect is None or (np.prod(curr_pos[0] - forbidden_rect[0, :]) > 0 or np.prod(
-                            curr_pos[1] - forbidden_rect[1, :]) > 0):
-                    if i == 0 or (
-                        euclidean_distance(curr_pos[:2], source_position[:2, :i]) >= d_from_other).all():
-                        source_position[:, i] = curr_pos[:, 0]
+            if np.linalg.norm(curr_pos[:2]-array_center[:2]) >= d_from_array:
+                if forbidden_rect is None or (np.prod(curr_pos[0] - forbidden_rect[0, :]) > 0 or np.prod(curr_pos[1] - forbidden_rect[1, :]) > 0):
+                    if i == 0 or (np.linalg.norm(curr_pos[:2,np.newaxis]-source_position[:2, :i], axis=0) >= d_from_other).all():
+                        source_position[:, i] = curr_pos[:]
                         break
             if cnt > 1000:
-                raise Exception(
-                    "Maximum number (1000) of trial finished but still not able to find acceptable position for speaker position. ")
+                raise Exception("Maximum number (1000) of trial finished but still not able to find acceptable position for speaker position. ")
 
     return source_position
 
 
-def sample_source_position_in_meeting_room(self, config, n_spk, room_size, array_center, table, seat_circle):
-    source_position = np.zeros((3, n_spk))
-
-    d_from_wall = config['min_dist_from_wall'] if "min_dist_from_wall" in config.keys() else [0.0, 0.0]
-    d_from_array = config['min_dist_from_array'] if "min_dist_from_array" in config.keys() else 0.1
-    d_from_other = config['min_dist_from_other'] if "min_dist_from_other" in config.keys() else 0.2
-    if "height" in config.keys():
-        z_distribution = config['height']
-    else:
-        z_distribution = get_distribution_template("comment", min=0.0, max=room_size[2])
-
-    seat_sampler = AroundRectangleSampler2D(room_size[:2], seat_circle, table)
-
-    for i in range(n_spk):
-        cnt = 0
-        while 1:
-            xy = seat_sampler.get_sample()[0]
-            z = get_sample(z_distribution)
-            curr_pos = np.hstack([np.asarray(xy), z]).reshape((3, 1))
-            if euclidean_distance(curr_pos[:2], array_center[:2]) >= d_from_array:
-                if i == 0 or (
-                    euclidean_distance(curr_pos[:2], source_position[:2, :i]) >= d_from_other).all():
-                    source_position[:, i] = curr_pos[:, 0]
-                    break
-            if cnt > 1000:
-                raise Exception(
-                    "Maximum number (1000) of trial finished but still not able to find acceptable position for speaker position. ")
-
-    return source_position
-
-
-def sample_source_position_by_min_angle(self, config, n_spk, room_size, array_center):
-    all_v = []
-
-    for i in range(n_spk):
-        cnt = 0
-        while True:
-            this_v = np.random.uniform(0, 359, size=1)[0]
-            L = [this_v - x for x in all_v]
-            if len(L) == 0:
-                all_v.append(this_v)
-                break
-            elif np.min(np.abs(L)) > float(config['between_source_angle']['min']):
-                all_v.append(this_v)
-                break
-            if cnt > 1000:
-                print(
-                    "Simulator::sample_source_position_by_min_angle: Warning: still cannot find acceptable source positions after 1000 trials.")
-            cnt += 1
-
-    all_v = np.asarray(all_v) / 180 * np.pi
-    all_h = get_sample(config['height'], n_sample=n_spk)
-
-    r = np.zeros((n_spk,))
-    for i in range(n_spk):
-        ryp, rym = self.find_ry(room_size[1], array_center[1], all_v[i])
-        rxp, rxm = self.find_rx(room_size[0], array_center[0], all_v[i])
-
-        rp = np.min([ryp, rxp])
-        r[i] = np.random.uniform(0.1 * rp, 0.9 * rp, size=1)[0]
-
-    all_source = np.zeros((n_spk, 3))
-
-    for i in range(n_spk):
-        all_source[i, 0] = r[i] * np.cos(all_v[i]) + array_center[0]
-        all_source[i, 1] = r[i] * np.sin(all_v[i]) + array_center[1]
-
-    all_source[:, 2] = all_h
-
-    return all_source, [all_v, all_h, r]
-
-
-def find_ry(self, R, M, angle):
-    if angle >= 0 and angle < np.pi / 2:
-        ryp = (R - M) / np.sin(angle)
-        rym = (M) / np.sin(angle)
-    if angle >= np.pi / 2 and angle < np.pi:
-        ryp = (R - M) / np.sin(np.pi - angle)
-        rym = (M) / np.sin(np.pi - angle)
-    if angle >= np.pi and angle < np.pi / 2 * 3:
-        ryp = (M) / np.sin(angle - np.pi)
-        rym = (R - M) / np.sin(angle - np.pi)
-    if angle >= np.pi / 2 * 3 and angle < 2 * np.pi:
-        ryp = M / np.sin(2 * np.pi - angle)
-        rym = (R - M) / np.sin(2 * np.pi - angle)
-
-    return ryp, rym
-
-
-def find_rx(self, R, M, angle):
-    if angle >= 0 and angle < np.pi / 2:
-        ryp = (R - M) / np.cos(angle)
-        rym = (M) / np.cos(angle)
-    if angle >= np.pi / 2 and angle < np.pi:
-        ryp = (-M) / np.cos(angle)
-        rym = (R - M) / np.cos(np.pi - angle)
-    if angle >= np.pi and angle < np.pi / 2 * 3:
-        ryp = (M) / np.cos(angle - np.pi)
-        rym = (R - M) / np.cos(angle - np.pi)
-    if angle >= np.pi / 2 * 3 and angle < 2 * np.pi:
-        ryp = (R - M) / np.cos(2 * np.pi - angle)
-        rym = (M) / np.cos(2 * np.pi - angle)
-    return ryp, rym
+# test
+# coordinates = sample_source_position_by_random_coordinate({}, 5, np.asarray([3,3,3]), np.asarray([1.5,1.5,1.5]))

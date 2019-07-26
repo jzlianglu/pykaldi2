@@ -33,15 +33,25 @@ from torch.utils.data.distributed import DistributedSampler
 
 class ChunkDataloader(DataLoader):
 
-    def __init__(self, dataset, batch_size, num_workers=0, timeout=1000):
-        self.dataset = dataset
-
-        super(ChunkDataloader, self).__init__(dataset,
+    def __init__(self, dataset, batch_size, distributed=False, num_workers=0, timeout=1000):
+ 
+        if not distributed: 
+            super(ChunkDataloader, self).__init__(dataset,
                                               batch_size=batch_size,
                                               shuffle=True,
                                               num_workers=num_workers,
                                               collate_fn=self.collate_fn,
                                               timeout=timeout)
+        else:
+            import horovod.torch as hvd
+            sampler = DistributedSampler(dataset, num_replicas=hvd.size(), rank=hvd.rank())
+            super(ChunkDataloader, self).__init__(dataset,
+                                           batch_size=batch_size,
+                                           sampler=sampler,
+                                           num_workers=num_workers,
+                                           collate_fn=self.collate_fn,
+                                           drop_last=False,
+                                           timeout=timeout)
 
     def collate_fn(self, batch):
         feats, utt_ids, labels = zip(*batch)
@@ -59,14 +69,12 @@ class SeqDataloader(DataLoader):
     def __init__(self, dataset, batch_size, num_workers=0, distributed=False, test_only=False, timeout=1000):
         
         self.test_only = test_only
-        self.dataset = dataset
-        self.distributed = distributed
  
         # now decide on a sampler
         #base_sampler = torch.utils.data.SequentialSampler(self.dataset)
-        base_sampler = torch.utils.data.RandomSampler(self.dataset)
+        base_sampler = torch.utils.data.RandomSampler(dataset)
         
-        if not self.distributed:
+        if not distributed:
             sampler = torch.utils.data.BatchSampler(base_sampler, batch_size, False)
             super(SeqDataloader, self).__init__(dataset,
                                            batch_sampler=sampler,
