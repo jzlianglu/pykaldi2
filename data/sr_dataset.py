@@ -312,7 +312,7 @@ class DataGeneratorTrain:
             assert len(index) == 2
             source_stream_idx = index[0]
             utt_id = [self._source_streams[source_stream_idx].utt_id[index[1]]]
-            _, _, source_wav, _ = self._source_streams[source_stream_idx].read_utt_with_id(source_utt_id, load_data=True)
+            _, _, source_wav, _ = self._source_streams[source_stream_idx].read_utt_with_id(utt_id, load_data=True)
 
         if np.random.random() > self._config.simulation_prob:
             simulated_wav = source_wav[0]
