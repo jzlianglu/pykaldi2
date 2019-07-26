@@ -1,8 +1,11 @@
 import numpy as np
-from .sampling import get_distribution_template
+from ._sampling import get_distribution_template
+from ._mixer import MixerConfig
+from ._geometry import SoundSourceConfig, ArrayPositionConfig, RoomConfig
+from ._iso_noise_simulator import ISONoiseConfig
 
 
-def gen_stft_config():
+def _gen_stft_config():
     config = {}
     config['fs'] = 16000
     config['frame_len'] = 400
@@ -14,28 +17,22 @@ def gen_stft_config():
     return config
 
 
-def gen_default_config(mic_positions=[[0],[0],[0]]):
+def _gen_default_simu_config(mic_positions=[[0],[0],[0]]):
+    """
+    Generate configuration for room simulation with default values.
+    Users should not call this function directly. See the following configuration functions.
+    """
 
     config = {}
 
-    config['analysis'] = gen_stft_config()
+    config['analysis'] = _gen_stft_config()
 
     config['num_simulated'] = get_distribution_template('distribution of how many sentences to simulate from each pair of sources', max=1,
                                                   min=1, distribution='uniform_int')
     config['global_snr'] = get_distribution_template('distribution of global signal-to-noise ratio (SNR)', max=30,
                                               min=0, distribution='uniform')
     # define the distribution of the number of speaker sources and SNRs
-    config['sources'] = {}
-    config['sources']['num_spk'] = get_distribution_template('distribution of how many speech sources to use in the simulation', max=3,
-                                                  min=1, distribution='uniform_int')
-    config['sources']['position_scheme'] = "random_coordinate"      # [minimum_angle|random_coordinate]
-    config['sources']['between_source_angle'] = get_distribution_template('distribution of angles between sources in degrees',
-                                                               max=180, min=20, distribution='uniform')
-    config['sources']['min_dist_from_wall'] = [0.5,0.5]    # the minimum distance between speech source and a wall
-    config['sources']['min_dist_from_array'] = [0.3]    # the minimum distance between speech source and array center
-    config['sources']['min_dist_from_other'] = [0.5]    # the minimum distance between two speech sources
-    config['sources']['height'] = get_distribution_template('distribution of the height of speech sources in meters', max=2,
-        min=1, distribution='uniform')
+    config['sources'] = SoundSourceConfig().config
 
     config['dir_noise'] = {}
     config['dir_noise']['use_dir_noise'] = True
@@ -44,23 +41,9 @@ def gen_default_config(mic_positions=[[0],[0],[0]]):
     config['dir_noise']['num_dir_noise'] = get_distribution_template('distribution of how many directional noise sources to use in the simulation',
                                                   max=4, min=1, distribution='uniform_int')
 
-    config['mixing'] = {}
-    config['mixing']['mixed_length'] = {}
-    config['mixing']['mixed_length']['scheme'] = 'longest_source'
-    config['mixing']['mixed_length']['min'] = 5
-    config['mixing']['positioning'] = {}
-    config['mixing']['positioning']['scheme'] = 'random_start'
-    config['mixing']['ref_source'] = 'first_source'
-    config['mixing']['spr'] = get_distribution_template('distribution of signal power ratio (SPR) between the speech sources', max=2.5,
-                                              min=-2.5, distribution='uniform')
+    config['mixing'] = MixerConfig().config
 
-    config['iso_noise'] = {}
-    config['iso_noise']['use_iso_noise'] = True
-    config['iso_noise']['use_corpus'] = False
-    config['iso_noise']['type'] = 'sph'             # [sph|cyl]
-    config['iso_noise']['spectrum_type'] = 'hoth'   #[white|hoth]
-    config['iso_noise']['snr'] = get_distribution_template('distribution of the SNR of isotropic noises w.r.t. unit variance signal', max=30,
-                                              min=10, distribution='uniform')
+    config['iso_noise'] = ISONoiseConfig().config
 
     config['reverb'] = {}
     config['reverb']['use_reverb'] = True
@@ -71,23 +54,8 @@ def gen_default_config(mic_positions=[[0],[0],[0]]):
     config['reverb']['max_rir_length'] = 8000
 
     # define geometries
-    config['array'] = {}
-    config['array']['mic_positions'] = mic_positions
-    config['array']['position_scheme'] = 'ratio'
-    config['array']['length_ratio'] = get_distribution_template('distribution of array position in length axis (percentage)', max=0.8,
-                                              min=0.2, distribution='uniform')
-    config['array']['width_ratio'] = get_distribution_template('distribution of array position in width axis (percentage)', max=0.8,
-                                              min=0.2, distribution='uniform')
-    config['array']['height_ratio'] = get_distribution_template('distribution of array position in height axis (percentage)', max=0.6,
-                                              min=0.4, distribution='uniform')
-
-    config['room'] = {}
-    config['room']['length'] = get_distribution_template('distribution of room length in meters', max=20,
-                                              min=2.5, distribution='uniform')
-    config['room']['width'] = get_distribution_template('distribution of room width in meters', max=20,
-                                              min=2.5, distribution='uniform')
-    config['room']['height'] = get_distribution_template('distribution of room height in meters', max=5,
-                                              min=2.5, distribution='uniform')
+    config['array'] = ArrayPositionConfig(mic_positions).config
+    config['room'] = RoomConfig().config
 
     return config
 
@@ -102,7 +70,7 @@ def single_channel_single_source_config(use_reverb=True, use_noise=True, snr_ran
     :return: a config dictionary
     """
 
-    config = gen_default_config()
+    config = _gen_default_simu_config()
 
     config['sources']['num_spk']['max'] = 1
     config['sources']['num_spk']['min'] = 1
@@ -165,7 +133,7 @@ def multi_channel_single_source_config(mic_positions, use_iso_noise=True, use_di
     :return: a config dictionary
     """
 
-    config = gen_default_config()
+    config = _gen_default_simu_config()
 
     # verify the shape and content of mic_positions
     assert type(mic_positions) is np.ndarray
@@ -226,7 +194,7 @@ def multi_channel_multi_source_config(mic_positions, n_source_range=[2, 2], spr_
     return config
 
 
-if __name__ == "__main__":
+def _dump_config2file():
     import yaml
 
     mic_positions = np.asarray([[0, 0.1, 0.2],

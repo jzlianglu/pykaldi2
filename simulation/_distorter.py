@@ -1,9 +1,9 @@
 import numpy as np
-from.sampling import get_distribution_template, get_sample
+from ._sampling import get_distribution_template, get_sample
 import scipy.fftpack
 
 
-def fftconvolve1d(in1, in2, use_gpu=False):
+def _fftconvolve1d(in1, in2):
     """1D convolution along the first dimension"""
     m, n1 = in1.shape
     k, n2 = in2.shape
@@ -14,17 +14,23 @@ def fftconvolve1d(in1, in2, use_gpu=False):
     YY = np.fft.rfft(in2, rlen_p2, axis=0)
     ret = np.fft.irfft(XX * YY, rlen_p2, axis=0)
 
+    # the use of rfft seems to be faster than the rfftn used in scipy.signal.fftconvolve on CPU and numpy 1.16.2. Not
+    # sure about the reason.
+    #sp1 = np.fft.rfftn(in1, [rlen_p2,1], axes=(0,1))
+    #sp2 = np.fft.rfftn(in2, [rlen_p2,1], axes=(0,1))
+    #ret2 = np.fft.irfftn(sp1 * sp2, [rlen_p2,1], axes=(0,1))
+
     return ret[:rlen, :]
 
 
-def comp_noise_scale_given_snr(signal, noise, snr):
+def _comp_noise_scale_given_snr(signal, noise, snr):
     Px = np.mean(signal ** 2)
     Pn = np.mean(noise ** 2)
     scale = np.sqrt(Px / Pn * 10 ** ((-snr) / 10))
     return scale
 
 
-class NoiseSampler:
+class _NoiseSampler:
     def __init__(self):
         pass
 
@@ -75,7 +81,10 @@ class NoiseSampler:
         return noise_repeated, start
 
 
-class Distortor:
+class Distorter:
+    """
+    Apply room impuse response to input signals. Add noise.
+    """
     def __init__(self):
         pass
 
@@ -85,13 +94,21 @@ class Distortor:
 
     @staticmethod
     def add_noise(signal, noise, snr, noise_position_scheme='repeat_noise'):
+        """
+        Add additive noise to signal
+        :param signal: TxC matrix, where T is the number of samples and C is the number of channel
+        :param noise: T2xC matrix, where T2 is the number of samples of the noise
+        :param snr: a scalar that specifies signal-to-noise ratio (SNR)
+        :param noise_position_scheme: specify how to position the noise in the final waveform.
+        :return: distorted signal waveform
+        """
         n_sample,n_ch = signal.shape
-        scale = comp_noise_scale_given_snr(signal, noise, snr)
+        scale = _comp_noise_scale_given_snr(signal, noise, snr)
         noise_scaled = noise * scale
         if noise_position_scheme == 'repeat_noise':
-            noise_positioned, idx = NoiseSampler.repeat_noise(noise_scaled, n_sample)
+            noise_positioned, idx = _NoiseSampler.repeat_noise(noise_scaled, n_sample)
         elif noise_position_scheme == 'sample_noise':
-            noise_positioned, idx = NoiseSampler.sample_noise(noise_scaled, n_sample)
+            noise_positioned, idx = _NoiseSampler.sample_noise(noise_scaled, n_sample)
         else:
             raise Exception("Unknown noise position scheme %s" % (noise_position_scheme))
 
@@ -101,18 +118,31 @@ class Distortor:
 
     @staticmethod
     def apply_rir(wav, rir, fs=16000, sync=True, get_early_reverb=False, early_reverb_cutoff_time=0.04):
+        """
+        Apply room impulse response to the input signal.
+
+        :param wav: 1D array of source signal waveform
+        :param rir: TxC matrix, where T is the number of samples in RIR waveform, and C is the number of channels.
+        :param fs: sampling rate
+        :param sync: if set to True, output signal will be sample-synchrnoized to input signal. Note that RIR typically
+               causes a time shift of convolved signal.
+        :param get_early_reverb: whether to also return early reverbed signal. Early reverbed signal is the obtained by
+               convoling the signal with only the early reverb part of the RIR. See definition of early_reverb_cutoff_time
+        :param early_reverb_cutoff_time: the duration in terms of seconds of early reverb responses in RIR.
+        :return: both reverb and early_reverb signals
+        """
         n_sample = wav.size
         n_sample_rir = rir.shape[0]
         wav = wav.reshape(n_sample, 1)
         delay = int(np.argmax(rir,axis=0)[0])
 
         # generate reverberant speech
-        reverb = fftconvolve1d(rir, wav)
+        reverb = _fftconvolve1d(rir, wav)
 
         if get_early_reverb:
             rir_cutoff = int(np.minimum(n_sample_rir, early_reverb_cutoff_time*fs+delay))
             rir_early = rir[:rir_cutoff, :]
-            early_reverb = fftconvolve1d(rir_early, wav)
+            early_reverb = _fftconvolve1d(rir_early, wav)
         else:
             early_reverb = None
 
@@ -123,3 +153,39 @@ class Distortor:
 
         return reverb, early_reverb
 
+
+def _test_speed():
+    rir = np.random.randn(8000,1)
+    speech = np.random.randn(160000,1)
+
+    def tic():
+        import time
+        return time.time()
+
+    def toc(start_time):
+        import time
+        print("Elapsed time is %s seconds." % (str(time.time() - start_time)))
+
+    t1 = tic()
+    for i in range(100):
+        result1 = _fftconvolve1d(rir, speech)
+    toc(t1)
+    return_size = result1.size
+
+    t2 = tic()
+    for i in range(100):
+        result2 = scipy.signal.fftconvolve(rir, speech)[:return_size, :]
+    toc(t2)
+
+    t3 = tic()
+    # scipy convolve automatically select freq. or time domain convolution. May be much faster than scipy fftconvolve
+    # for short inputs.
+    for i in range(100):
+        result3 = scipy.signal.convolve(rir, speech)[:return_size, :]
+    toc(t3)
+
+    import matplotlib.pyplot as plt
+    plt.plot(result1 - result2)
+
+
+#_test_speed()

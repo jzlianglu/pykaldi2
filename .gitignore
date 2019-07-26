@@ -1,0 +1,21 @@
+# Python #
+__pycache__/
+*.py[cod]
+*$py.class
+*.npz
+*.npy
+
+# Data #
+/*.wav
+/*.WAV
+tmp/
+temp/
+nnet/
+.vs/
+.idea/
+
+/slnx.sqlite
+JournalDir/
+exp/
+*.html
+old_*
