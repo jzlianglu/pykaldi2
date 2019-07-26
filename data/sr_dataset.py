@@ -123,7 +123,7 @@ class SpeechDataset(data.Dataset):
         if self.sequence_mode:
             self.data_buffer = data_generator
         else:
-            self.data_buffer = DataBuffer(data_generator, buffer_size=200, preload_size=200, randomize=True)
+            self.data_buffer = DataBuffer(data_generator, buffer_size=20000, preload_size=200, randomize=True)
 
         self.sample_len_seconds = config["data_config"]["seg_len"] * 0.01 # default sampling rate: 100Hz
         self.stream_idx_for_transform = [0]
@@ -322,6 +322,7 @@ class DataGeneratorTrain:
 
         if self._config.load_label:
             _, label = self._source_streams[source_stream_idx].read_label_with_id(utt_id)
+
             frame_label = label['label'][0].T
             if 'aux_label' in label:
                 aux_label = label['aux_label']

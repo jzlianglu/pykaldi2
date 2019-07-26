@@ -13,7 +13,7 @@ data_config:
     snr_max: 20
     t60_min: 0.1
     t60_max: 0.5
-    simulation_prob: 0.5
+    simulation_prob: 0.5    # the probability of applying data simulation
 model_config:
     feat_dim: 80
     hidden_size: 512
