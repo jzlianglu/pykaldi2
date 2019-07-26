@@ -60,7 +60,7 @@ def main():
     parser.add_argument("-aneal_lr_ratio", default=0.5, type=float, help="the ratio to aneal the learning rate")
     parser.add_argument('-p', '--print-freq', default=100, type=int,
                     metavar='N', help='print frequency (default: 100)')
-    parser.add_argument('-multi_gpu', default=False, type=bool, help="whether to use multi-GPU training")
+    parser.add_argument('-hvd', default=False, type=bool, help="whether to use horovod for training")
 
     args = parser.parse_args()
 
@@ -81,13 +81,11 @@ def main():
     print("Experiment starts with config {}".format(json.dumps(config, sort_keys=True, indent=4)))
 
      # Initialize Horovod
-    if args.multi_gpu:
+    if args.hvd:
         import horovod.torch as hvd
         hvd.init()
         th.cuda.set_device(hvd.local_rank())
         print("Run experiments with world size {}".format(hvd.size()))
-    else:
-        pass
 
     if not os.path.isdir(args.exp_dir):
         os.makedirs(args.exp_dir)
@@ -126,7 +124,7 @@ def main():
     # optimizer
     optimizer = th.optim.Adam(model.parameters(), lr=args.lr, amsgrad=True)
 
-    if args.multi_gpu:
+    if args.hvd:
         # Broadcast parameters and opterimizer state from rank 0 to all other processes.
         hvd.broadcast_parameters(model.state_dict(), root_rank=0)
         hvd.broadcast_optimizer_state(optimizer, root_rank=0)
@@ -160,7 +158,7 @@ def main():
         run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args)
 
         # save model
-        if not args.multi_gpu or hvd.rank()== 0:
+        if not args.hvd or hvd.rank()== 0:
             checkpoint={}
             checkpoint['model']=model.state_dict()
             checkpoint['optimizer']=optimizer.state_dict()
@@ -207,7 +205,7 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
         # measure elapsed time
         batch_time.update(time.time() - end)
 
-        if not args.multi_gpu or (hvd.rank() == 0 and i % args.print_freq == 0):
+        if not args.hvd or (hvd.rank() == 0 and i % args.print_freq == 0):
             progress.print(i)
 
 if __name__ == '__main__':
