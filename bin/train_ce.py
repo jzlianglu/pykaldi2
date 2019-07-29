@@ -58,8 +58,7 @@ def main():
     parser.add_argument("-dropout", type=float, help="set the dropout ratio")
     parser.add_argument("-aneal_lr_epoch", default=2, type=int, help="start to aneal the learning rate from this epoch")  # aneal -> anneal?
     parser.add_argument("-aneal_lr_ratio", default=0.5, type=float, help="the ratio to aneal the learning rate")
-    parser.add_argument('-p', '--print-freq', default=100, type=int,
-                    metavar='N', help='print frequency (default: 100)')
+    parser.add_argument('-print_freq', default=100, type=int, metavar='N', help='print frequency (default: 100)')
     parser.add_argument('-hvd', default=False, type=bool, help="whether to use horovod for training")
 
     args = parser.parse_args()
@@ -93,7 +92,7 @@ def main():
     trainset = SpeechDataset(config)
     train_dataloader = ChunkDataloader(trainset,
                                        batch_size=args.batch_size,
-                                       distributed=args.multi_gpu,
+                                       distributed=args.hvd,
                                        num_workers=args.data_loader_threads)
 
     if args.global_mvn:
@@ -205,7 +204,8 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
         # measure elapsed time
         batch_time.update(time.time() - end)
 
-        if not args.hvd or (hvd.rank() == 0 and i % args.print_freq == 0):
+        if i % args.print_freq == 0:
+    #        if not args.hvd or hvd.rank() == 0:
             progress.print(i)
 
 if __name__ == '__main__':
