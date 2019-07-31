@@ -65,6 +65,10 @@ Currently, the toolkit is still in the early stage, and we are still improving i
 
 If you are intersted to contribute to this line of research, please contact Liang Lu (email address is provided in the arxiv paper). 
 
+## Disclaimer
+
+This is not an official Microsoft product
+
 ## Reference
 
 Liang Lu, Xiong Xiao, Zhuo Chen, Yifan Gong, "[PyKaldi2: Yet another speech toolkit based on Kaldi and PyTorch](https://arxiv.org/abs/1907.05955)", arxiv, 2019
