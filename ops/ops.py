@@ -108,3 +108,35 @@ class sMBRFunction(Function):
         #flip the sign to maximize the frame accuracy 
         grad_input *= -1.0
         return th.autograd.Variable(grad_input), None, None, None, None, None
+
+class ChainObjtiveFunction(Function):
+    """
+        Input:
+        loglikes:
+    """
+
+    @staticmethod
+    def forward(ctx, loglikes, den_graph, supervision, chain_opts)
+
+            loglikes = kaldi_matrix.Matrix(loglikes.detach().cpu().numpy())
+            nnet_out = kaldi_cudamatrix.CuMatrix().from_matrix(loglikes)
+            grad = kaldi_cudamatrix.CuMatrix().from_size(nnet_out.num_rows(), nnet_out.num_cols())
+            grad_xent = kaldi_cudamatrix.CuMatrix().from_size(nnet_out.num_rows(), nnet_out.num_cols())
+
+            loss = kaldi_chain.compute_chain_objf_and_deriv(chain_opts, den, supervision, nnet_out, grad, grad_xent)
+
+            grad.add_mat(chain_opts.xent_regularize, grad_xent)
+            grad_out = kaldi_matrix.Matrix(nnet_out.num_rows(), nnet_out.num_cols())
+            grad.copy_to_mat(grad_out)
+
+            ctx.save_for_backward(th.from_numpy(grad_out).cuda())
+
+            return th.tensor(loss[1])
+
+    @staticmethod
+    def backward(ctx, grad_out):
+
+        grad_input, = ctx.saved_tensors
+
+        return th.audograd.Variable(grad_input), None, None, None
+
