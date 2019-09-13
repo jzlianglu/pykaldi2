@@ -56,8 +56,8 @@ def main():
     parser.add_argument("-global_mvn", default=False, type=bool, help="if apply global mean and variance normalization")
     parser.add_argument("-resume_from_model", type=str, help="the model from which you want to resume training")
     parser.add_argument("-dropout", type=float, help="set the dropout ratio")
-    parser.add_argument("-aneal_lr_epoch", default=2, type=int, help="start to aneal the learning rate from this epoch")  # aneal -> anneal?
-    parser.add_argument("-aneal_lr_ratio", default=0.5, type=float, help="the ratio to aneal the learning rate")
+    parser.add_argument("-anneal_lr_epoch", default=2, type=int, help="start to anneal the learning rate from this epoch") 
+    parser.add_argument("-anneal_lr_ratio", default=0.5, type=float, help="the ratio to anneal the learning rate")
     parser.add_argument('-print_freq', default=100, type=int, metavar='N', help='print frequency (default: 100)')
     parser.add_argument('-hvd', default=False, type=bool, help="whether to use horovod for training")
 
@@ -150,9 +150,9 @@ def main():
     for epoch in range(start_epoch, args.num_epochs):
 
          # aneal learning rate
-        if epoch > args.aneal_lr_epoch:
+        if epoch > args.anneal_lr_epoch:
             for param_group in optimizer.param_groups:
-                param_group['lr'] *= args.aneal_lr_ratio
+                param_group['lr'] *= args.anneal_lr_ratio
 
         run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args)
 
