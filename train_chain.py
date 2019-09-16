@@ -73,7 +73,7 @@ def main():
     parser.add_argument("-sweep_size", default=100, type=float, help="process n hours of data per sweep (default:100)")
     parser.add_argument("-num_epochs", default=1, type=int, help="number of training epochs (default:1)")
     parser.add_argument("-anneal_lr_epoch", default=2, type=int, help="start to anneal the learning rate from this epoch")  
-    parser.add_argument("-aneal_lr_ratio", default=0.5, type=float, help="the ratio to anneal the learning rate ratio") 
+    parser.add_argument("-anneal_lr_ratio", default=0.5, type=float, help="the ratio to anneal the learning rate ratio")
     parser.add_argument('-print_freq', default=10, type=int, metavar='N', help='print frequency (default: 10)')
     parser.add_argument('-save_freq', default=1000, type=int, metavar='N', help='save model frequency (default: 1000)')
 
