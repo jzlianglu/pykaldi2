@@ -131,7 +131,7 @@ def main():
     model.cuda()
 
     # setup the optimizer
-    optimizer = th.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = th.optim.Adam(model.parameters(), lr=args.lr, amsgrad=True)
 
     # Broadcast parameters and opterimizer state from rank 0 to all other processes.
     hvd.broadcast_parameters(model.state_dict(), root_rank=0)
@@ -191,7 +191,7 @@ def main():
     # setup the aligner
     aligner = kaldi_align.MappedAligner.from_files(ali_model, ali_tree, L_fst, None,
                                  disambig, None, 
-                                 beam=config["decoder_config"]["align_beam"],
+                                 beam=10,
                                  transition_scale=1.0, 
                                  self_loop_scale=0.1, 
                                  acoustic_scale=0.1)
@@ -242,7 +242,7 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
         aux = batch["aux"]  #word labels for se loss
     
         x = feat.to(th.float32)
-        x = x.unfold(1, 1, 3).squeeze(-1)
+        x = x.unfold(1, 1, supervision_opts.frame_subsampling_factor).squeeze(-1)
         x = x.cuda()   
         y = label.squeeze(2) 
                                                 
@@ -260,8 +260,7 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
             proto_supervision = kaldi_chain.alignment_to_proto_supervision(supervision_opts, phones, durations)
             supervision = kaldi_chain.proto_supervision_to_supervision(tree, trans_model, proto_supervision, True)
 
-            loglike = prediction[j,:,:]
-            loglike_j = loglike[:supervision.frames_per_sequence,:]
+            loglike_j = prediction[j, :supervision.frames_per_sequence,:]
             loss = criterion(loglike_j, den, supervision, chain_opts) 
             
         optimizer.zero_grad()
@@ -273,11 +272,11 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
 
         grad_norm.update(norm)
 
-        # update loss
+        # update the loss
         tot_frs = np.array(num_frs).sum()
         losses.update(loss.item()/tot_frs)
 
-        # measure elapsed time
+        # measure the elapsed time
         batch_time.update(time.time() - end)
 
         # save model
@@ -285,7 +284,7 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
             checkpoint={}
             checkpoint['model']=model.state_dict()
             checkpoint['optimizer']=optimizer.state_dict()
-            output_file=args.exp_dir + '/model.se.'+ str(i) +'.tar'
+            output_file=args.exp_dir + '/chain.model.'+ str(i) +'.tar'
             th.save(checkpoint, output_file)
 
         if hvd.rank() == 0 and i % args.print_freq == 0:
