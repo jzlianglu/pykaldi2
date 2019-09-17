@@ -40,13 +40,10 @@ import kaldi.fstext as kaldi_fst
 import kaldi.hmm as kaldi_hmm
 import kaldi.matrix as kaldi_matrix
 import kaldi.lat as kaldi_lat
-import kaldi.decoder as kaldi_decoder
 import kaldi.alignment as kaldi_align
 import kaldi.util as kaldi_util
 import kaldi.chain as kaldi_chain
 import kaldi.tree as kaldi_tree
-from kaldi.asr import MappedLatticeFasterRecognizer
-from kaldi.decoder import LatticeFasterDecoderOptions
 
 from data import SpeechDataset, SeqDataloader
 from models import LSTMStack, NnetAM
@@ -58,7 +55,7 @@ def main():
     parser.add_argument("-config")       
     parser.add_argument("-data", help="data yaml file")
     parser.add_argument("-dataPath", default='', type=str, help="path of data files") 
-    parser.add_argument("-seed_model", default='', help="the seed nerual network model")                                                                                  
+    parser.add_argument("-seed_model", default='', help="the seed nerual network model") 
     parser.add_argument("-exp_dir", help="the directory to save the outputs") 
     parser.add_argument("-transform", help="feature transformation matrix or mvn statistics")
     parser.add_argument("-ali_dir", help="the directory to load trans_model and tree used for alignments") 
@@ -245,7 +242,8 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
         x = x.unfold(1, 1, supervision_opts.frame_subsampling_factor).squeeze(-1)
         x = x.cuda()   
         y = label.squeeze(2) 
-                                                
+
+        loss = 0.0
         prediction = model(x)
         for j in range(len(num_frs)):                   
             trans_ids = y[j, :num_frs[j]].tolist()
@@ -261,7 +259,7 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
             supervision = kaldi_chain.proto_supervision_to_supervision(tree, trans_model, proto_supervision, True)
 
             loglike_j = prediction[j, :supervision.frames_per_sequence,:]
-            loss = criterion(loglike_j, den, supervision, chain_opts) 
+            loss += criterion(loglike_j, den, supervision, chain_opts) 
             
         optimizer.zero_grad()
         loss.backward()
