@@ -4,7 +4,7 @@ python ../../bin/train_ce.py -train_config configs/ce.yaml \
     -lr 0.0001 \
     -batch_size 1 \
     -sweep_size 460 \
-    -aneal_lr_epoch 3 \
+    -anneal_lr_epoch 3 \
     -num_epochs 8 \
-    -aneal_lr_ratio 0.5 
+    -anneal_lr_ratio 0.5 
 
