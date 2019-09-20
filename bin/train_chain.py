@@ -62,6 +62,7 @@ def main():
     parser.add_argument("-lang_dir", help="the lexicon directory to load L.fst")
     parser.add_argument("-chain_dir", help="the directory to load trans_model, tree and den.fst for chain model")
     parser.add_argument("-lr", type=float, help="set the learning rate")
+    parser.add_argument("-xent_regularize", default=0, type=float, help="cross-entropy regularization weight")
     parser.add_argument("-momentum", default=0, type=float, help="set the momentum") 
     parser.add_argument("-weight_decay", default=1e-4, type=float, help="set the L2 regularization weight") 
     parser.add_argument("-batch_size", default=32, type=int, help="Override the batch size in the config")                         
@@ -183,7 +184,7 @@ def main():
     # chain training options
     chain_opts = kaldi_chain.ChainTrainingOptions()
     chain_opts.leaky_hmm_coefficient = 1e-4
-    chain_opts.xent_regularize = 1e-4
+    chain_opts.xent_regularize = args.xent_regularize
 
     # setup the aligner
     aligner = kaldi_align.MappedAligner.from_files(ali_model, ali_tree, L_fst, None,
@@ -193,6 +194,9 @@ def main():
                                  self_loop_scale=0.1, 
                                  acoustic_scale=0.1)
     den_graph = kaldi_chain.DenominatorGraph(den_fst, model_config["label_size"])
+
+    #encoder_layer = nn.TransformerEncoderLayer(512, 8)
+    #print(encoder_layer)
 
     model.train()
     for epoch in range(args.num_epochs): 
