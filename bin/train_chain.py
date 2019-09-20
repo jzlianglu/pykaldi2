@@ -242,10 +242,10 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
         utt_ids = batch["utt_ids"]                       
         aux = batch["aux"]  #word labels for se loss
    
-        shift = epoch % supervision_opts.frame_subsampling_factor * -1
+        frame_shift = (epoch % supervision_opts.frame_subsampling_factor) * -1
 
         x = feat.to(th.float32)
-        x = th.roll(x, -shift, 1)
+        x = th.roll(x, frame_shift, 1)
         x = x.unfold(1, 1, supervision_opts.frame_subsampling_factor).squeeze(-1)
         x = x.cuda()   
         y = label.squeeze(2) 
