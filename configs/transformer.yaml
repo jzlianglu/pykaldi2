@@ -1,0 +1,23 @@
+data_config:
+    frame_len: 400
+    frame_shift: 160
+    seg_len: 80
+    seg_shift: 80
+    sequence_mode: True
+    load_label: True
+    use_iso_noise: False
+    use_dir_noise: False
+    use_reverb: False
+    use_cmn: True
+    simulation_prob: 0
+    snr_min: 10
+    snr_max: 20
+    t60_min: 0.1
+    t60_max: 0.5
+model_config:
+    feat_dim: 80
+    hidden_size: 512
+    dropout: 0.2
+    num_layers: 3
+    label_size: 5768 
+#    label_size: 4080

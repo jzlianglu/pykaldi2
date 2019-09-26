@@ -1,0 +1,20 @@
+clean_source:
+  1:    
+    type: Librispeech
+    wav: /datadisk2/lial/LibriSpeechWav/train-clean-100.zip
+    label: /datadisk2/lial/LibriSpeechWav/train-clean-460-pdf-ids.txt
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-clean-460-trans-ids.txt
+  2:
+    type: Librispeech
+    wav: /datadisk2/lial/LibriSpeechWav/train-clean-360.zip 
+    aux_label: /datadisk2/lial/LibriSpeechWav/train-clean-460-trans-ids.txt
+    label: /datadisk2/lial/LibriSpeechWav/train-clean-460-pdf-ids.txt
+
+dir_noise:                                
+  1:                                      
+    type: Noise                           
+    wav: /datadisk2/lial/LibriSpeechWav/NOISE.zip                
+rir:                                      
+  1:                                      
+    type: RIR                             
+    wav: /datadisk2/lial/LibriSpeechWav/rir_c1_n10_t60_0.2_0.5_2018-08-07.zip 

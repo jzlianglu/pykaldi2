@@ -30,30 +30,6 @@ import numpy as np
 import torch as th
 import torch.nn as nn
 
-class LSTMStack(nn.Module):
-
-    def __init__(self, input_size, hidden_size, num_layers, dropout, bidirectional):
-        super(LSTMStack, self).__init__()
-
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.dropout = dropout
-        self.bidirectional = bidirectional
-
-        self.lstm = nn.LSTM(input_size = self.input_size,
-            hidden_size = self.hidden_size,
-            num_layers = self.num_layers ,
-            batch_first = True,
-            dropout = self.dropout,
-            bidirectional = self.bidirectional)
-
-    def forward(self, data):
-        self.lstm.flatten_parameters()
-        output, (h,c) = self.lstm(data)
-        
-        return output
-
 class PositionalEncoding(nn.Module):
 
     def __init__(self, dim_model, dropout=0.1, max_len=5000):
@@ -89,34 +65,24 @@ class TransformerEncoderLayerWithConv1d(nn.Module):
 
        return output.view(output.size(2), output.size(0), output.size(1))
 
-class TransformerEncoder(nn.Module):
+class TransformerAM(nn.Module):
 
-    def __init__(self, dim_feat, dim_model, nheads, dim_feedforward, nlayers, dropout):
-        super(TransformerEncoder, self).__init__()
+    def __init__(self, dim_feat, dim_model, nheads, dim_feedforward, nlayers, dropout, output_size):
+        super(TransformerAM, self).__init__()
         self.pos_encoder = PositionalEncoding(dim_model, dropout)
+        #self.input_layer = nn.Conv1d(dim_feat, dim_model, 3, 1, 1)
         self.input_layer = nn.Linear(dim_feat, dim_model)
+        self.output_layer = nn.Linear(dim_model, output_size)
         encoder_layer = TransformerEncoderLayerWithConv1d(dim_model, nheads, dim_feedforward, dropout, 3, 1)
         self.transformer = nn.TransformerEncoder(encoder_layer, nlayers, norm=None)
 
     def forward(self, data, src_mask=None, src_key_padding_mask=None):
-        feat = self.input_layer(data)
-        feat = self.pos_encoder(feat)
-        output = self.transformer(feat, src_key_padding_mask=mask)
-        
-        return output
-
-class NnetAM(nn.Module):
-    
-    def __init__(self, nnet, hidden_size, output_size):
-        super(NnetAM, self).__init__()
-
-        self.nnet = nnet
-        self.output_size = output_size
-        self.output_layer = nn.Linear(hidden_size, output_size)
-
-    def forward(self, data, mask=None):
-        nnet_output = self.nnet(data, mask)
-        output = self.output_layer(nnet_output)
+        #input = self.input_layer(data.view(data.size(1), data.size(2), data.size(0)))
+        #input = self.pos_encoder(input.view(input.size(2), input.size(0), input.size(1)))
+        input = self.input_layer(data)
+        input = self.pos_encoder(input)
+        enc_output = self.transformer(input, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+        output = self.output_layer(enc_output)
 
         return output
 

@@ -1,0 +1,19 @@
+clean_source:
+  1:    
+    type: Librispeech
+    wav: /data/Libri/train-clean-100.zip
+    label: /data/Libri/train-clean-460-pdf-ids.txt
+#    aux_label: /data/Libri/train-clean-100-word.txt
+  2:
+    type: Librispeech
+    wav: /data/Libri/train-clean-360.zip
+    label: /data/Libri/train-clean-460-pdf-ids.txt
+#    aux_label: /data/Libri/train-clean-460-word.txt
+dir_noise:
+  1:
+    type: Noise
+    wav: /data/Distortion/NOISE.zip
+rir:
+  1:
+    type: RIR
+    wav: /data/Distortion/rir_c1_n10_t60_0.2_0.5_2018-08-07.zip

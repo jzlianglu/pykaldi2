@@ -1,0 +1,26 @@
+data_config:
+    frame_len: 400
+    frame_shift: 160
+    seg_len: 80
+    seg_shift: 80
+    sequence_mode: False
+    load_label: True
+    use_iso_noise: False
+    use_dir_noise: True
+    use_reverb: True
+    use_cmn: True
+#    n_segment_per_epoch: 100 
+    snr_min: 10
+    snr_max: 20
+    t60_min: 0.1
+    t60_max: 0.5
+#    source_wav: /datadisk2/lial/LibriSpeechWav/train-clean-100.zip
+#    source_label: /datadisk2/lial/LibriSpeechWav/train-clean-100-label.txt 
+#    dir_noise_paths: None
+#    rir_paths: None
+model_config:
+    feat_dim: 80
+    hidden_size: 32
+    dropout: 0.2
+    num_layers: 3
+    label_size: 4080 
