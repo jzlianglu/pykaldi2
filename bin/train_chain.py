@@ -61,7 +61,8 @@ def main():
     parser.add_argument("-ali_dir", help="the directory to load trans_model and tree used for alignments") 
     parser.add_argument("-lang_dir", help="the lexicon directory to load L.fst")
     parser.add_argument("-chain_dir", help="the directory to load trans_model, tree and den.fst for chain model")
-    parser.add_argument("-lr", type=float, help="set the learning rate")
+    parser.add_argument("-lr", type=float, help="set the base learning rate")
+    parser.add_argument("-warmup_steps", default=4000, type=int, help="the number of warmup steps to adjust the learning rate")
     parser.add_argument("-xent_regularize", default=0, type=float, help="cross-entropy regularization weight")
     parser.add_argument("-momentum", default=0, type=float, help="set the momentum") 
     parser.add_argument("-weight_decay", default=1e-4, type=float, help="set the L2 regularization weight") 
@@ -269,6 +270,12 @@ def run_train_epoch(model, optimizer, dataloader, epoch, trans_model, tree, supe
             
         optimizer.zero_grad()
         loss.backward()
+
+        #update lr
+        step = len(dataloader) * epoch + i + 1
+        lr = utils.noam_decay(step, args.warmup_steps, args.lr)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
         # Gradient Clipping (th 5.0)
         norm = nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)

@@ -45,3 +45,9 @@ class ProgressMeter(object):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
+
+def noam_decay(step, warmup_steps, base_lr):
+    """Learning rate schedule described in
+    https://arxiv.org/pdf/1706.03762.pdf.
+    """
+    return ( base_lr * min(step ** (-0.5), step * warmup_steps**(-1.5)))
