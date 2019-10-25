@@ -29,10 +29,11 @@ import math
 import numpy as np
 import torch as th
 import torch.nn as nn
+import torch.nn.functional as F
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, dim_model, dropout=0.1, max_len=5000):
+    def __init__(self, dim_model, dropout=0, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -61,28 +62,34 @@ class TransformerEncoderLayerWithConv1d(nn.Module):
 
     def forward(self, src, src_mask=None, src_key_padding_mask=None):
        output = self.encoder_layer(src, src_mask, src_key_padding_mask)
-       output = self.conv1d(output.view(output.size(1), output.size(2), output.size(0)))
+       output = F.relu(self.conv1d(output.permute(1, 2, 0)))
 
-       return output.view(output.size(2), output.size(0), output.size(1))
+       return output.permute(2, 0, 1)
 
 class TransformerAM(nn.Module):
 
-    def __init__(self, dim_feat, dim_model, nheads, dim_feedforward, nlayers, dropout, output_size):
+    def __init__(self, dim_feat, 
+                dim_model, 
+                nheads, 
+                dim_feedforward, 
+                nlayers, 
+                dropout, 
+                output_size, 
+                kernel_size=3,
+                stride=1):
         super(TransformerAM, self).__init__()
         self.pos_encoder = PositionalEncoding(dim_model, dropout)
-        #self.input_layer = nn.Conv1d(dim_feat, dim_model, 3, 1, 1)
         self.input_layer = nn.Linear(dim_feat, dim_model)
         self.output_layer = nn.Linear(dim_model, output_size)
-        encoder_layer = TransformerEncoderLayerWithConv1d(dim_model, nheads, dim_feedforward, dropout, 3, 1)
-        self.transformer = nn.TransformerEncoder(encoder_layer, nlayers, norm=None)
+        encoder_norm = nn.LayerNorm(dim_model)
+        encoder_layer = TransformerEncoderLayerWithConv1d(dim_model, nheads, dim_feedforward, dropout, kernel_size, stride)
+        self.transformer = nn.TransformerEncoder(encoder_layer, nlayers, norm=encoder_norm)
 
     def forward(self, data, src_mask=None, src_key_padding_mask=None):
-        #input = self.input_layer(data.view(data.size(1), data.size(2), data.size(0)))
-        #input = self.pos_encoder(input.view(input.size(2), input.size(0), input.size(1)))
         input = self.input_layer(data)
-        input = self.pos_encoder(input)
-        enc_output = self.transformer(input, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
-        output = self.output_layer(enc_output)
+        #input = self.pos_encoder(input)
+        output = self.transformer(input, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+        output = self.output_layer(output)
 
         return output
 
