@@ -37,9 +37,8 @@ import torch.nn as nn
 
 from reader.preprocess import GlobalMeanVarianceNormalization
 from data import SpeechDataset, ChunkDataloader, SeqDataloader
-from models import lstm
 from utils import utils
-
+from models import transformer
 
 def main():
     parser = argparse.ArgumentParser()
@@ -55,11 +54,15 @@ def main():
     parser.add_argument("-num_epochs", default=1, type=int, help="number of training epochs (default:1)")
     parser.add_argument("-global_mvn", default=False, type=bool, help="if apply global mean and variance normalization")
     parser.add_argument("-resume_from_model", type=str, help="the model from which you want to resume training")
-    parser.add_argument("-dropout", type=float, help="set the dropout ratio")
-    parser.add_argument("-anneal_lr_epoch", default=2, type=int, help="start to anneal the learning rate from this epoch") 
-    parser.add_argument("-anneal_lr_ratio", default=0.5, type=float, help="the ratio to anneal the learning rate")
+    parser.add_argument("-dropout", default=0, type=float, help="set the dropout ratio")
+    parser.add_argument("-warmup_step", default=4000, type=int, help="the number of warmup steps for the lr schedule")
+    parser.add_argument("-nheads", default=4, type=int, help="the number of attention heads") 
+    parser.add_argument("-dim_model", default=512, type=int, help="the model dimension") 
+    parser.add_argument("-ff_size", default=2048, type=int, help="the size of feed-forward layer")
+    parser.add_argument("-nlayers", default=6, type=int, help="the number of layers") 
+    parser.add_argument("-look_ahead", default=-1, type=int, help="the number of frames to look ahead")
     parser.add_argument('-print_freq', default=100, type=int, metavar='N', help='print frequency (default: 100)')
-    parser.add_argument('-hvd', default=False, type=bool, help="whether to use horovod for training")
+    parser.add_argument('-hvd', default=True, type=bool, help="whether to use horovod for training")
 
     args = parser.parse_args()
 
@@ -90,10 +93,11 @@ def main():
         os.makedirs(args.exp_dir)
 
     trainset = SpeechDataset(config)
-    train_dataloader = ChunkDataloader(trainset,
-                                       batch_size=args.batch_size,
-                                       distributed=args.hvd,
-                                       num_workers=args.data_loader_threads)
+    train_dataloader = SeqDataloader(trainset,
+                                    batch_size=args.batch_size,
+                                    num_workers = args.data_loader_threads,
+                                    distributed=True,
+                                    test_only=False)
 
     if args.global_mvn:
         transform = GlobalMeanVarianceNormalization()
@@ -112,7 +116,7 @@ def main():
 
     # ceate model
     model_config = config["model_config"]
-    model = lstm.LSTMStack(model_config["feat_dim"], model_config["label_size"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
+    model = transformer.TransformerAM(model_config["feat_dim"], args.dim_model, args.nheads, args.ff_size, args.nlayers, args.dropout, model_config["label_size"])
 
     # Start training
     th.backends.cudnn.enabled = True
@@ -148,11 +152,6 @@ def main():
     model.train()
     for epoch in range(start_epoch, args.num_epochs):
 
-         # aneal learning rate
-        if epoch > args.anneal_lr_epoch:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] *= args.anneal_lr_ratio
-
         run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args)
 
         # save model
@@ -166,7 +165,6 @@ def main():
 
 def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
     batch_time = utils.AverageMeter('Time', ':6.3f')
-    #data_time = utils.AverageMeter('Data', ':6.3f')
     losses = utils.AverageMeter('Loss', ':.4e')
     grad_norm = utils.AverageMeter('grad_norm', ':.4e')
     progress = utils.ProgressMeter(len(train_dataloader), batch_time, losses, grad_norm,
@@ -177,28 +175,51 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
     for i, data in enumerate(train_dataloader, 0):
         feat = data["x"]
         label = data["y"]
+        num_frs = data["num_frs"]
+        utt_ids = data["utt_ids"]
 
         x = feat.to(th.float32)
-        y = label.unsqueeze(2).long()
+        y = label.squeeze(2).long()
 
         if th.cuda.is_available():
             x = x.cuda()
             y = y.cuda()
 
-        prediction = model(x)
-        loss = criterion(prediction.view(-1, prediction.shape[2]), y.view(-1))
+        x = x.transpose(0, 1)
+        key_padding_mask = th.ones((x.size(1), x.size(0)))
+         
+        for utt in range(len(num_frs)):
+            key_padding_mask[utt, :num_frs[utt]] = 0
+
+        src_mask = None
+        if(args.look_ahead > -1):
+            src_mask = th.tril(th.ones(x.size(0), x.size(0)), diagonal=args.look_ahead)
+            src_mask = src_mask.float().masked_fill(src_mask == 0, float('-inf')).masked_fill(src_mask == 1, float(0.0))
+            src_mask = src_mask.cuda()
+
+        key_padding_mask = key_padding_mask.bool().cuda()
+        prediction = model(x, src_mask, key_padding_mask)
+        prediction = prediction.transpose(0, 1).contiguous()
+        loss = criterion(prediction.view(-1, prediction.size(2)), y.view(-1))
 
         optimizer.zero_grad()
         loss.backward()
 
         # Gradient Clipping
         norm = nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+  
+        #update lr
+        step = len(train_dataloader) * epoch + i + 1
+        lr = utils.noam_decay(step, args.warmup_step, args.lr)
+        for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
+
         optimizer.step()
 
         grad_norm.update(norm)
 
         # update loss
-        losses.update(loss.item(), x.size(0))
+        losses.update(loss.item(), x.size(1))
 
         # measure elapsed time
         batch_time.update(time.time() - end)

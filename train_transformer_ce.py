@@ -37,14 +37,14 @@ import torch.nn as nn
 
 from reader.preprocess import GlobalMeanVarianceNormalization
 from data import SpeechDataset, ChunkDataloader, SeqDataloader
-from models import lstm
 from utils import utils
-
+from models import transformer
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-exp_dir")
+    parser.add_argument("-modelPath")       # the first three configs will be passed by Philly
     parser.add_argument("-dataPath", default='', type=str, help="path of data files")
+    parser.add_argument("-logPath", default='', type=str, help="path of log files")
     parser.add_argument("-train_config")
     parser.add_argument("-data_config")
     parser.add_argument("-lr", default=0.0001, type=float, help="Override the LR in the config")
@@ -59,9 +59,10 @@ def main():
     parser.add_argument("-anneal_lr_epoch", default=2, type=int, help="start to anneal the learning rate from this epoch") 
     parser.add_argument("-anneal_lr_ratio", default=0.5, type=float, help="the ratio to anneal the learning rate")
     parser.add_argument('-print_freq', default=100, type=int, metavar='N', help='print frequency (default: 100)')
-    parser.add_argument('-hvd', default=False, type=bool, help="whether to use horovod for training")
+    parser.add_argument('-hvd', default=True, type=bool, help="whether to use horovod for training")
 
     args = parser.parse_args()
+    args.exp_dir = args.modelPath
 
     with open(args.train_config) as f:
         config = yaml.safe_load(f)
@@ -90,10 +91,11 @@ def main():
         os.makedirs(args.exp_dir)
 
     trainset = SpeechDataset(config)
-    train_dataloader = ChunkDataloader(trainset,
-                                       batch_size=args.batch_size,
-                                       distributed=args.hvd,
-                                       num_workers=args.data_loader_threads)
+    train_dataloader = SeqDataloader(trainset,
+                                    batch_size=args.batch_size,
+                                    num_workers = args.data_loader_threads,
+                                    distributed=True,
+                                    test_only=False)
 
     if args.global_mvn:
         transform = GlobalMeanVarianceNormalization()
@@ -112,7 +114,8 @@ def main():
 
     # ceate model
     model_config = config["model_config"]
-    model = lstm.LSTMStack(model_config["feat_dim"], model_config["label_size"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
+#    lstm = LSTMStack(model_config["feat_dim"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
+    model = transformer.TransformerAM(80, 512, 4, 512, 4, 0.1, model_config["label_size"])
 
     # Start training
     th.backends.cudnn.enabled = True
@@ -177,6 +180,8 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
     for i, data in enumerate(train_dataloader, 0):
         feat = data["x"]
         label = data["y"]
+        num_frs = data["num_frs"]
+        utt_ids = data["utt_ids"]
 
         x = feat.to(th.float32)
         y = label.unsqueeze(2).long()
@@ -185,7 +190,17 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
             x = x.cuda()
             y = y.cuda()
 
-        prediction = model(x)
+        x = x.view(x.size(1), x.size(0), x.size(2))
+        key_padding_mask = th.ones((x.size(1), x.size(0)))
+        for utt in range(len(num_frs)):
+            key_padding_mask[utt, :num_frs[utt]] = 0
+
+        src_mask = th.tril(th.ones(x.size(0), x.size(0)), diagonal=40)
+        #src_mask = th.tril(src_mask, diagonal=src_mask.size(0))
+        src_mask = src_mask.float().masked_fill(src_mask == 0, float('-inf')).masked_fill(src_mask == 1, float(0.0))
+
+        key_padding_mask = key_padding_mask.bool().cuda()
+        prediction = model(x, None, key_padding_mask)
         loss = criterion(prediction.view(-1, prediction.shape[2]), y.view(-1))
 
         optimizer.zero_grad()
@@ -198,7 +213,7 @@ def run_train_epoch(model, optimizer, criterion, train_dataloader, epoch, args):
         grad_norm.update(norm)
 
         # update loss
-        losses.update(loss.item(), x.size(0))
+        losses.update(loss.item(), x.size(1))
 
         # measure elapsed time
         batch_time.update(time.time() - end)

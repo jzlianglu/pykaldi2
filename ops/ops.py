@@ -113,7 +113,10 @@ class sMBRFunction(Function):
 class ChainObjtiveFunction(Function):
     """
         Input:
-        loglikes:
+        loglikes: log-likelihoods from the nnet after the forward operation
+        den_graph: the denominator graph for chain model training
+        supervision: in the format of Kaldi supervision class
+        chain_opts: options for chain model training
     """
 
     @staticmethod

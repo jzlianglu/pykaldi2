@@ -47,7 +47,7 @@ from kaldi.asr import MappedLatticeFasterRecognizer
 from kaldi.decoder import LatticeFasterDecoderOptions
 
 from data import SpeechDataset, SeqDataloader
-from models import LSTMStack, NnetAM
+from models import lstm
 from ops import ops
 from utils import utils
 
@@ -119,8 +119,7 @@ def main():
 
     # ceate model
     model_config = config["model_config"]
-    lstm = LSTMStack(model_config["feat_dim"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
-    model = NnetAM(lstm, model_config["hidden_size"]*2, model_config["label_size"])
+    model = lstm.LSTMAM(model_config["feat_dim"], model_config["label_size"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
 
     model.cuda()
 

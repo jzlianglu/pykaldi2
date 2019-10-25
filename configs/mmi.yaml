@@ -1,0 +1,39 @@
+stft_config:
+    frame_rate: 16000
+    fft_size: 512
+    analysis_window: hanning
+    do_dither: True
+    dc_removal: False 
+    frame_len: 400
+    frame_shift: 160
+data_config:
+    frame_len: 400
+    frame_shift: 160
+    seg_len: 80
+    seg_shift: 80
+    sequence_mode: True
+    load_label: True
+    use_iso_noise: False
+    use_dir_noise: False
+    use_reverb: False
+    use_cmn: True
+    simulation_prob: 0
+    snr_min: 10
+    snr_max: 20
+    t60_min: 0.1
+    t60_max: 0.5
+model_config:
+    feat_dim: 80
+    hidden_size: 512
+    dropout: 0
+    num_layers: 3
+ #   label_size: 4080
+#    label_size: 5768
+    label_size: 6048
+decoder_config: 
+    beam: 13
+    lattice_beam: 7
+    max_active: 7000
+    acoustic_scale: 0.1
+    align_beam: 10
+

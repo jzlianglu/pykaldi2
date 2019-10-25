@@ -25,13 +25,14 @@ SOFTWARE.
 
 import os
 import sys
+import math
 import numpy as np
 import torch as th
 import torch.nn as nn
 
-class LSTMStack(nn.Module):
+class LSTMAM(nn.Module):
 
-    def __init__(self, input_size, hidden_size, num_layers, dropout, bidirectional):
+    def __init__(self, input_size, output_size, hidden_size, num_layers, dropout, bidirectional):
         super(LSTMStack, self).__init__()
 
         self.input_size = input_size
@@ -39,6 +40,11 @@ class LSTMStack(nn.Module):
         self.num_layers = num_layers
         self.dropout = dropout
         self.bidirectional = bidirectional
+
+        if bidirectional:
+            self.output_layer = nn.Linear(hidden_size*2, output_size)
+        else:
+            self.output_layer = nn.Linear(hidden_size, output_size)
 
         self.lstm = nn.LSTM(input_size = self.input_size,
             hidden_size = self.hidden_size,
@@ -50,23 +56,7 @@ class LSTMStack(nn.Module):
     def forward(self, data):
         self.lstm.flatten_parameters()
         output, (h,c) = self.lstm(data)
-        
-        return output, (h,c)
-
-
-class NnetAM(nn.Module):
-    
-    def __init__(self, nnet, hidden_size, output_size):
-        super(NnetAM, self).__init__()
-
-        self.nnet = nnet
-        self.output_size = output_size
-        self.output_layer = nn.Linear(hidden_size, output_size)
-
-    def forward(self, data):
-        nnet_output, (h,c) = self.nnet(data)
-        output = self.output_layer(nnet_output)
-
+        output = self_output_layer(output)      
+  
         return output
-
 

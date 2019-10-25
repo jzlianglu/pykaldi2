@@ -1,28 +1,28 @@
-"""
-Copyright (c) 2019 Microsoft Corporation. All rights reserved.
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-"""
-
+"""                                                                             
+Copyright (c) 2019 Microsoft Corporation. All rights reserved.                  
+                                                                                
+MIT License                                                                     
+                                                                                
+Permission is hereby granted, free of charge, to any person obtaining a copy    
+of this software and associated documentation files (the "Software"), to deal   
+in the Software without restriction, including without limitation the rights    
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell       
+copies of the Software, and to permit persons to whom the Software is           
+furnished to do so, subject to the following conditions:                        
+                                                                                
+The above copyright notice and this permission notice shall be included in all  
+copies or substantial portions of the Software.                                 
+                                                                                
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR      
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,        
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE     
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER          
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,   
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE   
+SOFTWARE.                                                                       
+                                                                                
+"""                                                                             
+                                                                        
 import yaml
 import argparse
 import numpy as np
@@ -30,6 +30,7 @@ import os
 import sys
 import time
 import json
+import pickle
 
 import torch as th
 import torch.nn as nn
@@ -41,46 +42,51 @@ import kaldi.hmm as kaldi_hmm
 import kaldi.matrix as kaldi_matrix
 import kaldi.lat as kaldi_lat
 import kaldi.decoder as kaldi_decoder
-import kaldi.alignment as kaldi_align
 import kaldi.util as kaldi_util
 from kaldi.asr import MappedLatticeFasterRecognizer
 from kaldi.decoder import LatticeFasterDecoderOptions
 
 from data import SpeechDataset, SeqDataloader
-from models import lstm
+from models import transformer
 from ops import ops
 from utils import utils
 
 def main():
     parser = argparse.ArgumentParser()                                                                                 
-    parser.add_argument("-config")       
+    parser.add_argument("-config")                                                                                    
     parser.add_argument("-data", help="data yaml file")
     parser.add_argument("-dataPath", default='', type=str, help="path of data files") 
-    parser.add_argument("-seed_model", help="the seed nerual network model")                                                                                  
-    parser.add_argument("-exp_dir", help="the directory to save the outputs") 
-    parser.add_argument("-transform", help="feature transformation matrix or mvn statistics")
+    parser.add_argument("-seed_model", help="the seed nerual network model")                         
+    parser.add_argument("-exp_dir", help="the directory to save the outputs")
+    parser.add_argument("-transform", help="feature transformation matrix or mvn statistics") 
     parser.add_argument("-criterion", type=str, choices=["mmi", "mpfe", "smbr"], help="set the sequence training crtierion") 
-    parser.add_argument("-trans_model", help="the HMM transistion model directory") 
+    parser.add_argument("-trans_model", help="the HMM transistion model, used for lattice generation") 
     parser.add_argument("-prior_path", help="the prior for decoder, usually named as final.occs in kaldi setup")
     parser.add_argument("-den_dir", help="the decoding graph directory to find HCLG and words.txt files")
-    parser.add_argument("-lang_dir", help="the lexicon directory to find L.fst")
     parser.add_argument("-lr", type=float, help="set the learning rate")
-    parser.add_argument("-ce_ratio", default=0.1, type=float, help="the ratio for ce regularization") 
-    parser.add_argument("-momentum", default=0, type=float, help="set the momentum") 
-    parser.add_argument("-weight_decay", default=1e-4, type=float, help="set the L2 regularization weight") 
-    parser.add_argument("-batch_size", default=32, type=int, help="Override the batch size in the config")                         
+    parser.add_argument("-ce_ratio", default=0.1, type=float, help="the ratio for ce regularization")
+    parser.add_argument("-momentum", default=0, type=float, help="set the momentum")                                      
+    parser.add_argument("-batch_size", default=32, type=int, help="Override the batch size in the config")
+    parser.add_argument("-dropout", default=0, type=float, help="set the dropout ratio")
+    parser.add_argument("-nheads", default=4, type=int, help="the number of attention heads") 
+    parser.add_argument("-dim_model", default=512, type=int, help="the model dimension") 
+    parser.add_argument("-ff_size", default=2048, type=int, help="the size of feed-forward layer")
+    parser.add_argument("-nlayers", default=6, type=int, help="the number of layers") 
+    parser.add_argument("-look_ahead", default=-1, type=int, help="the number of frames to look ahead")                      
     parser.add_argument("-data_loader_threads", default=0, type=int, help="number of workers for data loading")
     parser.add_argument("-max_grad_norm", default=5, type=float, help="max_grad_norm for gradient clipping")                     
-    parser.add_argument("-sweep_size", default=100, type=float, help="process n hours of data per sweep (default:100)")
+    parser.add_argument("-sweep_size", default=100, type=float, help="process n hours of data per sweep (default:60)")
     parser.add_argument("-num_epochs", default=1, type=int, help="number of training epochs (default:1)") 
     parser.add_argument('-print_freq', default=10, type=int, metavar='N', help='print frequency (default: 10)')
     parser.add_argument('-save_freq', default=1000, type=int, metavar='N', help='save model frequency (default: 1000)')
 
     args = parser.parse_args()
+    #args.exp_dir = args.modelPath
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
+    config['data_path'] = args.dataPath
     config["sweep_size"] = args.sweep_size
 
     print("pytorch version:{}".format(th.__version__))
@@ -88,11 +94,6 @@ def main():
     with open(args.data) as f:
         data = yaml.safe_load(f)
         config["source_paths"] = [j for i, j in data['clean_source'].items()]
-        if 'dir_noise' in data:
-            config["dir_noise_paths"] = [j for i, j in data['dir_noise'].items()]
-        if 'rir' in data:
-            config["rir_paths"] = [j for i, j in data['rir'].items()]
-    config['data_path'] = args.dataPath
 
     print("Experiment starts with config {}".format(json.dumps(config, sort_keys=True, indent=4)))
 
@@ -124,12 +125,11 @@ def main():
 
     # ceate model
     model_config = config["model_config"]
-    model = lstm.LSTMAM(model_config["feat_dim"], model_config["label_size"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
-
+    model = transformer.TransformerAM(model_config["feat_dim"], args.dim_model, args.nheads, args.ff_size, args.nlayers, args.dropout, model_config["label_size"])
     model.cuda()
 
     # setup the optimizer
-    optimizer = th.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = th.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
     # Broadcast parameters and opterimizer state from rank 0 to all other processes.
     hvd.broadcast_parameters(model.state_dict(), root_rank=0)
@@ -150,10 +150,6 @@ def main():
     HCLG = args.den_dir + "/HCLG.fst"
     words_txt = args.den_dir + "/words.txt"
     silence_phones = args.den_dir + "/phones/silence.csl"
-    kaldi_model = args.trans_model + "/final.mdl"
-    tree = args.trans_model + "/tree"
-    L_fst = args.lang_dir + "/L.fst"
-    disambig = args.lang_dir + "/phones/disambig.int"
 
     if not os.path.isfile(HCLG):
         sys.stderr.write('ERROR: The HCLG file %s does not exist!\n'%(HCLG))
@@ -170,14 +166,14 @@ def main():
         silence_ids = [int(i) for i in f.readline().strip().split(':')]
         f.close()
 
-    if os.path.isfile(kaldi_model):
+    if os.path.isfile(args.trans_model):
        trans_model = kaldi_hmm.TransitionModel()
-       with kaldi_util.io.xopen(kaldi_model) as ki:
+       with kaldi_util.io.xopen(args.trans_model) as ki:
            trans_model.read(ki.stream(), ki.binary)
     else:
-       sys.stderr.write('ERROR: The trans_model %s does not exist!\n'%(trans_model))
+       sys.stderr.write('ERROR: The trans_model %s does not exist!\n'%(args.trans_model))
        sys.exit(0)
-   
+    
     # now we can setup the decoder
     decoder_opts = LatticeFasterDecoderOptions()
     decoder_opts.beam = config["decoder_config"]["beam"]
@@ -186,21 +182,18 @@ def main():
     acoustic_scale = config["decoder_config"]["acoustic_scale"]
     decoder_opts.determinize_lattice = False  #To produce raw state-level lattice instead of compact lattice
     asr_decoder = MappedLatticeFasterRecognizer.from_files(
-        kaldi_model, HCLG, words_txt,
+        args.trans_model, HCLG, words_txt,
         acoustic_scale=acoustic_scale, decoder_opts=decoder_opts)
 
-    # setup the aligner
-    aligner = kaldi_align.MappedAligner.from_files(kaldi_model, tree, L_fst, None,
-                                 disambig, None, 
-                                 beam=config["decoder_config"]["align_beam"],
-                                 transition_scale=1.0, 
-                                 self_loop_scale=0.1, 
-                                 acoustic_scale=0.1)
-    # compute the log prior
     prior = kaldi_util.io.read_matrix(args.prior_path).numpy()
     log_prior = th.tensor(np.log(prior[0]/np.sum(prior[0])), dtype=th.float)
 
     model.train()
+
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print(params)
+
     for epoch in range(args.num_epochs): 
 
         run_train_epoch(model, optimizer,
@@ -210,7 +203,6 @@ def main():
                        asr_decoder, 
                        trans_model,
                        silence_ids,
-                       aligner,
                        args)
 
         # save model
@@ -222,7 +214,7 @@ def main():
             output_file=args.exp_dir + '/model.se.'+ str(epoch) +'.tar'
             th.save(checkpoint, output_file)
 
-def run_train_epoch(model, optimizer, log_prior, dataloader, epoch, asr_decoder, trans_model, silence_ids, aligner, args):
+def run_train_epoch(model, optimizer, log_prior, dataloader, epoch, asr_decoder, trans_model, silence_ids, args):
     batch_time = utils.AverageMeter('Time', ':6.3f')
     losses = utils.AverageMeter('Loss', ':.4e')
     grad_norm = utils.AverageMeter('grad_norm', ':.4e')
@@ -230,48 +222,55 @@ def run_train_epoch(model, optimizer, log_prior, dataloader, epoch, asr_decoder,
                              prefix="Epoch: [{}]".format(epoch))
 
     ce_criterion = nn.CrossEntropyLoss(ignore_index=-100, reduction='sum')
+ 
     if args.criterion == "mmi":
-        criterion = ops.MMIFunction.apply
+        se_criterion = ops.MMIFunction.apply
     else:
-        criterion = ops.sMBRFunction.apply
+        se_criterion = ops.sMBRFunction.apply
 
     end = time.time()
-    for i, batch in enumerate(dataloader):
+    for i, batch in enumerate(dataloader, 0):
         feat = batch["x"] 
-        label = batch["y"]                               
+        label = batch["y"]   #pdf-ids for ce loss
         num_frs = batch["num_frs"]                       
         utt_ids = batch["utt_ids"]                       
-        aux = batch["aux"]  #word labels for se loss
-                                       
-        x = feat.to(th.float32)                         
-        y = label.long()
-        x = x.cuda()    
-        y = y.cuda()                                
-                                                
-        prediction = model(x)
-        ce_loss = ce_criterion(prediction.view(-1, prediction.shape[2]), y.view(-1))
-        loss = args.ce_ratio * ce_loss
- 
-        for j in range(len(num_frs)):                   
-            loglike = prediction[j,:,:]       
-            loglike_j = loglike[:num_frs[j],:]        
-            loglike_j = loglike_j - log_prior
+        aux = batch["aux"]  #trans_ids for se loss
+
+        x = feat.to(th.float32)                        
+        y = label.long() 
+        x = x.cuda()                                    
+        y = y.cuda()
         
-            text = th.from_numpy(aux[j][0][0].astype(int)).tolist()
-            #text = ' '.join(str(k) for k in text)
-            try:
-                align_in = kaldi_matrix.Matrix(loglike_j.detach().cpu().numpy())
-                align_out = aligner.align(align_in, text) 
-                trans_ids = align_out["alignment"]
+        x = x.transpose(0, 1)
+        key_padding_mask = th.ones((x.size(1), x.size(0)))
+        
+        for utt in range(len(num_frs)):
+            key_padding_mask[utt, :num_frs[utt]] = 0
+	
+        src_mask = None
+        if(args.look_ahead > -1):
+            src_mask = th.tril(th.ones(x.size(0), x.size(0)), diagonal=args.look_ahead)
+            src_mask = src_mask.float().masked_fill(src_mask == 0, float('-inf')).masked_fill(src_mask == 1, float(0.0))
+            src_mask = src_mask.cuda()
 
-                if args.criterion == "mmi":
-                    se_loss = criterion(loglike_j, asr_decoder, trans_model, trans_ids)
-                else:
-                    se_loss = criterion(loglike_j, asr_decoder, trans_model, trans_ids, args.criterion, silence_ids)
-                loss += se_loss.cuda()
-            except:
-                print("Warning: failed to align utterance {}, skip the utterance for SE loss".format(utt_ids[j]))        
+        key_padding_mask = key_padding_mask.bool().cuda()
+        prediction = model(x, src_mask, key_padding_mask)
+        prediction = prediction.transpose(0, 1).contiguous()
+        ce_loss = ce_criterion(prediction.view(-1, prediction.shape[2]), y.view(-1))
+ 
+        se_loss = 0.0                         
+        for j in range(len(num_frs)):                   
+            log_like_j=prediction[j,:,:]       
+            log_like_j= log_like_j[:num_frs[j],:]        
+            log_like_j = log_like_j - log_prior
+            trans_id = th.from_numpy(aux[j][0][0].astype(int)).tolist()
+  
+            if args.criterion == "mmi":
+                se_loss += se_criterion(log_like_j, asr_decoder, trans_model, trans_id)
+            else:
+                se_loss += se_criterion(log_like_j, asr_decoder, trans_model, trans_id, args.criterion, silence_ids)
 
+        loss = se_loss.cuda() + args.ce_ratio * ce_loss
         optimizer.zero_grad()
         loss.backward()
 
