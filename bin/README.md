@@ -33,6 +33,10 @@ Currently, we have implemented cross-entropy training and sequence-discriminativ
 
    The script that dumps log-likelihoods for scroing. 
 
+8. train\_chain.py
+
+   A lattice-free MMI (LFMMI) training script for a LSTM based acoustic model. This is only the beta version, and it does not work better than the lattice-based apporach in the toolkit yet. We need to develop a new dataloader that prepare minibatches suitable for LFMMI. 
+
 ## Reference
 
 Liang Lu, "[A Transformer with Interleaved Self-attention and Convolution for Hybrid Acoustic Models](https://arxiv.org/abs/1910.10352)", arxiv, 2019
