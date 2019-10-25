@@ -17,25 +17,29 @@ Currently, we have implemented cross-entropy training and sequence-discriminativ
 
    Sequence training for LSTM acoustic model with on-the-fly alignment generation. However, from our results, this apporach does not outperform train\_se.py
 
-4. train\_transformer\_ce.py 
+4. train\_chain.py
+
+    A lattice-free MMI (LFMMI) training script for a LSTM based acoustic model. This is only the beta version, and it does not work better than the lattice-based apporach in the toolkit yet. We need to develop a new dataloader that prepare minibatches suitable for LFMMI.
+
+## Transformer-based acoustic model
+
+1. train\_transformer\_ce.py 
 
    Cross-entropy training for a transformer-based acoustic model.
 
-5. train\_transformer\_se.py
+2. train\_transformer\_se.py
 
    Sequence training for transformer-based acoustic model with fixed alignments. 
 
-6. latgen.py
+## Lattice generation and decoding
+
+1. latgen.py
    
    The script that can do lattice generation. 
 
-7. dump\_loglikes.py
+2. dump\_loglikes.py
 
    The script that dumps log-likelihoods for scroing. 
-
-8. train\_chain.py
-
-   A lattice-free MMI (LFMMI) training script for a LSTM based acoustic model. This is only the beta version, and it does not work better than the lattice-based apporach in the toolkit yet. We need to develop a new dataloader that prepare minibatches suitable for LFMMI. 
 
 ## Reference
 
