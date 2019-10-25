@@ -1,6 +1,6 @@
 # pykaldi2
 
-PyKaldi2 is a speech toolkit that is built based on [Kaldi](http://kaldi-asr.org/) and [PyTorch](https://pytorch.org/). It relies on [PyKaldi](https://github.com/pykaldi/pykaldi) - the Python wrapper of Kaldi, to access Kaldi functionalities. The key features of PyKaldi2 are one-the-fly lattice generation for lattice-based sequence training, on-the-fly data simulation and on-the-fly alignment gereation. 
+PyKaldi2 is a speech toolkit that is built based on [Kaldi](http://kaldi-asr.org/) and [PyTorch](https://pytorch.org/). It relies on [PyKaldi](https://github.com/pykaldi/pykaldi) - the Python wrapper of Kaldi, to access Kaldi functionalities. The key features of PyKaldi2 are one-the-fly lattice generation for lattice-based sequence training, on-the-fly data simulation and on-the-fly alignment gereation. A beta version lattice-free MMI (LFMMI) training script is also provided.  
 
 ## How to install
 
