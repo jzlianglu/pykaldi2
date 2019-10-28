@@ -19,7 +19,7 @@ PyKaldi2 runs on top of the [Horovod](https://github.com/horovod/horovod) and Py
    Alternatively, you can download the docker image by
 
   ```
-    docker pull pykaldi2docker/horovod-pykaldi:v0
+    docker pull pykaldi2docker/horovod-pykaldi:torch1.2
   ```
 3. Activate the docker image, for example
 
