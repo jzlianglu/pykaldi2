@@ -78,9 +78,12 @@ The bash script for SE training is **run_se.sh**, which is like
   ```
 The *prior_path*, *trans\_model* and *den_dir* are from the Kaldi setup. Trained with 960 hours of data, we obtained the following results in our experiments.
 
-| model  |  loss | dev-clean |  dev-other | test-clean | test-other |
-|--------|-------|-----------|------------|------------|------------|
-|        | CE    | 4.6       | 13.4       | 5.1        | 13.5       |
-|  BLSTM | MMI   | 4.3       | 12.1       | 4.8        | 12.5       |
-|        | sMBR  | 4.3       | 12.3       | 4.9        | 12.5       |
-|        | MPE   | 4.4       | 12.3       | 4.8        | 12.5       |
+| model  | size |  loss | dev-clean |  dev-other | test-clean | test-other |
+|--------|------|-------|-----------|------------|------------|------------|
+|        |      | CE    | 4.6       | 13.4       | 5.1        | 13.5       |
+|  BLSTM |  21M | MMI   | 4.3       | 12.1       | 4.8        | 12.5       |
+|        |      | sMBR  | 4.3       | 12.3       | 4.9        | 12.5       |
+|        |      | MPE   | 4.4       | 12.3       | 4.8        | 12.5       |
+|--------|------|-------|-----------|------------|------------|------------|
+|xformer | 26.6M| CE    | 4.5       | 11.5       | 4.9        | 11.8       |
+|        |      | MMI   | 4.3       | 10.7       | 4.6        | 11.1       |     
