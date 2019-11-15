@@ -50,6 +50,12 @@ from models import lstm
 from ops import ops
 from utils import utils
 
+from kaldi.cudamatrix import cuda_available
+if cuda_available():
+    from kaldi.cudamatrix import CuDevice
+    CuDevice.instantiate().select_gpu_id('yes')
+    CuDevice.instantiate().allow_multithreading()
+    
 def main():
     parser = argparse.ArgumentParser()                                                                                 
     parser.add_argument("-config")       
