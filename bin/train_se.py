@@ -139,7 +139,7 @@ def main():
         model.load_state_dict(state_dict)                                           
         print("=> loaded checkpoint '{}' ".format(args.seed_model))                      
     else:
-        sys.stderr.write('ERROR: The model file %s does not exist!\n'%(model_file))
+        sys.stderr.write('ERROR: The model file %s does not exist!\n'%(args.seed_model))
         sys.exit(0)      
 
     HCLG = args.den_dir + "/HCLG.fst"
