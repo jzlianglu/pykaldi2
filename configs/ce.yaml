@@ -9,7 +9,6 @@ data_config:
     use_dir_noise: False
     use_reverb: False
     use_cmn: True
-    simulation_prob: 0
     snr_min: 10
     snr_max: 20
     t60_min: 0.1
@@ -20,4 +19,4 @@ model_config:
     dropout: 0.2
     num_layers: 3
     label_size: 5768 
-#    label_size: 4080
+    #4080 

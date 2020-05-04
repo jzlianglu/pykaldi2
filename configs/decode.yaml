@@ -8,7 +8,6 @@ data_config:
     use_iso_noise: False
     use_dir_noise: False
     use_reverb: False
-    simulation_prob: 0
     use_cmn: True
     snr_min: 10
     snr_max: 20
@@ -19,8 +18,8 @@ model_config:
     hidden_size: 512
     dropout: 0
     num_layers: 3
-    label_size: 6048
-#    label_size: 5768
+    label_size: 5768 
+#    label_size: 4080
 decoder_config:
     beam: 15
     lattice_beam: 8

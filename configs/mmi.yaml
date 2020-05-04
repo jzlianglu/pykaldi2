@@ -17,7 +17,6 @@ data_config:
     use_dir_noise: False
     use_reverb: False
     use_cmn: True
-    simulation_prob: 0
     snr_min: 10
     snr_max: 20
     t60_min: 0.1
@@ -27,13 +26,12 @@ model_config:
     hidden_size: 512
     dropout: 0
     num_layers: 3
- #   label_size: 4080
-#    label_size: 5768
-    label_size: 6048
+#    label_size: 4080 
+    label_size: 5768
 decoder_config: 
     beam: 13
     lattice_beam: 7
     max_active: 7000
     acoustic_scale: 0.1
-    align_beam: 10
+    align_beam: 40
 

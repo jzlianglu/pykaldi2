@@ -1,28 +1,3 @@
-"""
-Copyright (c) 2019 Microsoft Corporation. All rights reserved.
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-"""
-
 import yaml
 import argparse
 import numpy as np
@@ -42,6 +17,7 @@ from data import SpeechDataset, SeqDataloader
 from models import LSTMStack, NnetAM
 
 def main():
+#if __name__ == '__main__':
     parser = argparse.ArgumentParser()                                                                                 
     parser.add_argument("-config")                                                                                     
     parser.add_argument("-model_path")                                                                                 
@@ -76,6 +52,7 @@ def main():
             transform = pickle.load(f)
 
     dataset = SpeechDataset(config)
+    print(transform)
     test_dataloader = SeqDataloader(dataset, 
                                     batch_size=args.batch_size, 
                                     test_only=True,
@@ -95,7 +72,7 @@ def main():
 
     assert os.path.isfile(args.model_path), "ERROR: model file {} does not exit!".format(args.model_path)
 
-    checkpoint = th.load(args.model_path, map_location='cuda:1')                                            
+    checkpoint = th.load(args.model_path, map_location='cuda:0')                                            
     state_dict = checkpoint['model']
     from collections import OrderedDict
     new_state_dict = OrderedDict()

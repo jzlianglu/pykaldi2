@@ -1,34 +1,11 @@
 #!/usr/bin/env python
-
-"""
-Copyright (c) 2019 Microsoft Corporation. All rights reserved.
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-"""
-
 import os
 import numpy as np
+import sys
+sys.path.append("..")
 import torch
 import pickle
+import utils
 
 
 def cmn(data, axis=1, is_tensor=False):
@@ -98,33 +75,24 @@ class GlobalMeanVarianceNormalization:
         self.var_stats = None
         self.n_frame = 0
 
-    def learn_mean_and_variance_from_train_loader(self, train_set, stream_keys=[], n_sample_to_use=200):
+    def learn_mean_and_variance_from_train_loader(self, train_loader, stream_keys=[], n_sample_to_use=200):
         n_sample_used = 0
-        # randomly get samples from train_set for mean and variance estimation
-        if len(train_set)<=n_sample_to_use:
-            random_idx = [i for i in range(len(train_set))]
-        else:
-            random_idx = np.random.choice(len(train_set), n_sample_to_use, replace=False)
-
-        for i in range(len(random_idx)):
-            data = train_set.__getitem__(random_idx[i])
+        for i, data in enumerate(train_loader, 0):       # trainloader is a iterator. This line extract one minibatch at one time
+            print("GlobalMeanVarianceNormalization::learn_mean_and_variance_from_train_loader: accumulate stats from minibatch %d" % i)
             for j in stream_keys:
-                if type(data[j]) is np.ndarray:
-                    tmp_data = [data[j]]
-                elif type(data[j]) is list:     # sometimes, a stream is a list of tensors
-                    tmp_data = data[j]
+                if type(data.get(j)) is torch.Tensor:
+                    tmp_data = [data.get(j)]
+                elif type(data.get(j)) is list:     # sometimes, a stream is a list of tensors
+                    tmp_data = data.get(j)
                 else:
                     continue
                 if i == 0 and self.mean_stats is None:
-                    self.initialize_stats(tmp_data[0].shape[1])
+                    self.initialize_stats(tmp_data[0].shape[2])
                 for k in tmp_data:
-                    self.accumulate_stats(k)
-                    n_sample_used += 1
+                    self.accumulate_stats(k.numpy())
+                    n_sample_used += k.shape[0]
             if n_sample_used > n_sample_to_use:
                 break
-            if i % 100 == 0:
-                print("GlobalMeanVarianceNormalization::learn_mean_and_variance_from_train_loader: accumulate stats from sample %d" % i)
-
         self.learn_mean_and_variance_from_stats()
 
     def initialize_stats(self, dim):
@@ -133,10 +101,13 @@ class GlobalMeanVarianceNormalization:
         self.n_frame = 0
 
     def accumulate_stats(self, data):
-        # assume data is a matrix with size TxD, where T is the number of frames, and D is the number of dimensions.
-        self.mean_stats += np.sum(data, axis=0, keepdims=True).T
-        self.var_stats += np.sum(data**2, axis=0, keepdims=True).T
-        self.n_frame += data.shape[0]
+        unpad = utils.padding.Padder.unpad_sequence(data)
+        data2 = np.vstack(unpad).T
+        #D, N, M = data2.shape
+        #data2 = np.reshape(data2, (D, N * M))
+        self.mean_stats += np.sum(data2, axis=1, keepdims=True)
+        self.var_stats += np.sum(data2**2, axis=1, keepdims=True)
+        self.n_frame += data2.shape[1]
 
     def learn_mean_and_variance_from_stats(self):
         self.mean_vec = self.mean_stats / self.n_frame
@@ -209,6 +180,7 @@ class GlobalMeanVarianceNormalization:
             return normed_data
 
     def apply_on_ndarray(self, data, is_tensor=False):
+        #mask = utils.padding.Padder.get_mask_from_padded(data)
         if self.mean_norm:
             if is_tensor:
                 if self.mean_vec_tensor is None:
@@ -226,4 +198,5 @@ class GlobalMeanVarianceNormalization:
                 data2 = data2 / self.std_vec_tensor
             else:
                 data2 = data2 / self.std_vec
+        #data2 = utils.padding.Padder.encode_data_by_mask(data2, mask)
         return data2

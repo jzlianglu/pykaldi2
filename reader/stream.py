@@ -1,28 +1,3 @@
-"""
-Copyright (c) 2019 Microsoft Corporation. All rights reserved.
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-"""
-
 import os
 import io
 import numpy as np
@@ -31,26 +6,7 @@ import zipfile
 import pickle
 import copy
 from . import reader
-
-
-def remove_from_list_by_index(full_list, unwanted_list):
-    # remove items from full_list using index in unwanted_list
-    if 1:
-        for ii in sorted(unwanted_list, reverse=True):
-            del full_list[ii]
-    elif 0:
-        new_list = [curr_entry for ii, curr_entry in enumerate(full_list) if ii not in unwanted_list]
-        full_list = new_list
-    elif 0:
-        new_list = np.delete(full_list, unwanted_list).tolist()
-        full_list = new_list
-
-
-def my_cat(file_path):
-    # read text lines from a text file, like the cat in unix
-    with open(file_path) as file:
-        lines = [line.rstrip('\n') for line in file]
-    return lines
+from utils import utils
 
 
 def wavlist2uttlist(wav_list):
@@ -67,7 +23,6 @@ def get_relative_path(root, file_list):
         rel_file_list.append(os.path.relpath(file_list[i], root))
 
     return rel_file_list
-
 
 class DataStream:
     """
@@ -111,7 +66,7 @@ class DataStream:
                 curr_data = self.data[index[i]]
                 name.append("NUMERIC")
 
-            curr_data = reader.convert_data_precision(curr_data, self.precision)
+            curr_data = utils.convert_data_precision(curr_data, self.precision)
             data.append(curr_data)
 
         return data, name
@@ -123,6 +78,7 @@ class DataStream:
 
         self.data_len = []
         for i in range(len(self.data)):
+            utils.print_progress(i, len(self.data), step=1000, tag='DataStream::set_data_len()')
             tmp_data_len = self.get_data_len(i)
             self.data_len.append(tmp_data_len)
 
@@ -159,7 +115,7 @@ class DataStream:
         data = self.reader.read(file_name)
         if isinstance(data, tuple):
             data = data[0]
-        return reader.convert_data_precision(data, self.precision)
+        return utils.convert_data_precision(data, self.precision)
 
     def get_data_len_from_file(self, file_name):
         data_len = self.reader.get_len(file_name)
@@ -263,18 +219,18 @@ class SpeechDataStream:
             self.utt2spk.pop(i)
             utt_idx_list.append(self.utt_id.index(i))
 
-        remove_from_list_by_index(self.utt_id, utt_idx_list)
+        utils.remove_from_list_by_index(self.utt_id, utt_idx_list)
 
         if self.data_stream is not None:
-            remove_from_list_by_index(self.data_stream.data, utt_idx_list)
+            utils.remove_from_list_by_index(self.data_stream.data, utt_idx_list)
             if self.data_stream.data_len is not None:
-                remove_from_list_by_index(self.data_stream.data_len, utt_idx_list)
+                utils.remove_from_list_by_index(self.data_stream.data_len, utt_idx_list)
 
         if self.vad_stream is not None:
-            remove_from_list_by_index(self.vad_stream.data, utt_idx_list)
+            utils.remove_from_list_by_index(self.vad_stream.data, utt_idx_list)
         if self.label_streams is not None:
             for label_name, label_stream in self.label_streams.items():
-                remove_from_list_by_index(label_stream.data, utt_idx_list)
+                utils.remove_from_list_by_index(label_stream.data, utt_idx_list)
 
         # regenerate the mappings
         self.spk_id = []
@@ -496,6 +452,104 @@ class WSJDataStream(SpeechDataStream):
         return utt_id[:3]
 
 
+class SimulatedStream (SpeechDataStream):
+    """For simulated sentences.
+    We store simulated sentences in pickle files which are themselves stored in big zip files. """
+    def __init__(self, data, vad_stream=None, text=None):
+        """data is a list of zip files or folders. """
+        self.denominator = '::'     # this is the symbol that separates simulated utt_id and source utt_id in the fused utt_id used for indexing
+        source_utt_id = []
+        source_spk_id = []
+        utt_list = []
+
+        # get the list of all the
+        file_list = []
+        for i in data:
+            if os.path.isdir(i):
+                file_list += glob.glob(i + '/**/*.pkl', recursive=True)
+            elif os.path.isfile(i):
+                file_list.append(i)
+            else:
+                print("Name %s does not exist, skipped!" % i)
+                
+        common_path = os.path.dirname(os.path.commonprefix(file_list))
+
+        self.data = []
+        for i in file_list:
+            extension = os.path.splitext(i)[1]
+            if extension == '.pkl':
+                tmp_spk_id, tmp_utt_id, tmp_utt_list = self.load_data_block(i)
+                source_utt_id += tmp_utt_id
+                source_spk_id += tmp_spk_id
+                utt_list += tmp_utt_list
+
+        # generate the utt_id and utt2spk
+        utt_id = []
+        utt2spk = dict()
+        utt_list_final = []
+        for i in range(len(source_utt_id)):
+            uid_prefix = utt_list[i][len(common_path):]
+            uid = source_utt_id[i]
+            sid = source_spk_id[i]
+            if type(uid) is list:   # multiple source utterances in one mixed simulated speech
+                for j in range(len(uid)):
+                    utt_id.append(uid_prefix+self.denominator+uid[j])
+                    utt2spk[utt_id[-1]] = sid[j]
+                    utt_list_final.append(utt_list[i])      # we need to repeat utt_list multiple times for multi-source simulated sentence to match utt_id
+            else:                   # single source utterance in simulated speech
+                utt_id.append(uid_prefix+self.denominator+uid)
+                utt2spk[utt_id[-1]] = sid
+                utt_list_final.append(utt_list[i])
+
+        data_stream = sig.io.stream.DataStream(utt_list_final, is_file=True, reader=reader.ZipPickleIO())
+
+        super().__init__(utt_id, data_stream, utt2spk=utt2spk, vad_stream=vad_stream, text=text)
+
+    def load_data_block(self, pkl_file):
+        simu_config = pickle.load(open(pkl_file, 'rb'))
+        zip_file = pkl_file[:-3]+'zip'
+        if not os.path.isfile(zip_file):
+            return [],[],[]
+        spk_id = []
+        utt_id = []
+        utt_list = []
+        for simulated_name in simu_config:
+            spk_id.append(simu_config[simulated_name]['source_speakers'])
+            utt_id.append(simu_config[simulated_name]['source_utt_id'])
+            utt_list.append(zip_file+'@/'+simulated_name)
+            
+        return spk_id, utt_id, utt_list
+
+    # need to override this function, as SimulatedStream uses fused utt_ids, e.g. abc::def, where abc is the relative
+    # path of the simulated sentence, while def is the utt_id of the source clean utterance.
+    def sample_utt_from_spk(self, spk, unwanted_utt_id=None, n_utt=1, replace=False, load_data=False, load_vad=False, min_length=None):
+        if spk not in self.spk2utt:
+            print("Speaker %s not in the corpus, return empty. " % spk)
+            return None
+
+        utt_of_spk = self.spk2utt[spk]
+        if unwanted_utt_id is not None:
+            candidate_set = [i for i in range(len(utt_of_spk)) if utt_of_spk[i].split(self.denominator)[1] not in unwanted_utt_id]
+        else:
+            candidate_set = [i for i in range(len(utt_of_spk))]
+
+        if replace is False:
+            assert len(self.spk2utt[spk]) >= len(candidate_set)
+
+        cnt = 0
+        while True:
+            idx = np.random.choice(candidate_set, n_utt, replace=replace)
+            sampled_utt_id = [utt_of_spk[i] for i in idx]
+            global_idx = [self.utt_id.index(i) for i in sampled_utt_id]
+            if self.check_min_len_requirement(global_idx, min_length=min_length):
+                break
+            cnt += 1
+            if cnt > 100:
+                print("SimulatedStream::sample_utt_from_spk: Warning: not able to find data with length longer than %d for speaker %s after 100 attempts. " % (min_length, spk))
+
+        return self.read_utt_with_id(sampled_utt_id, load_data=load_data, load_vad=load_vad)
+
+
 def gen_speech_stream_from_list(wav_list, utt2spk, get_duration=True, use_zip=True):
     """ Generate speech stream from wav file list and utt2spk. """
 
@@ -511,60 +565,30 @@ def gen_speech_stream_from_list(wav_list, utt2spk, get_duration=True, use_zip=Tr
     return speech_stream
 
 
-def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_names=None, utt2spk=None,
-                               corpus_name=None, is_speech_corpus=True, is_rir=False, get_duration=False):
-    """ Generate speech stream from zip file and utt2spk. The zip file contains wavfiles.
-    Parameters
-    -----------
-    zip_path: path of the zip file that contains the waveforms.
-    label_files: list of label files. Each line of label_files contains label for one utterance and have following
-        format:
-            utt_id_1 label_1
-            utt_id_2 label_2
-            ...
-        where utt_id_1 and utt_id_2 are utterance IDs of the sentences and can be any string as far as each utterance
-        has an unique ID. The utt_ids must be compatible with the file_names (excluding extension) in the zip file.
-    file_extension: define the extension of the files in the zip file. Used to filter out non-waveform files.
-    label_files: list of strings specifying the name of the label_files, e.g. "frame_label', 'word_label', etc.
-    utt2spk: a dictionary mapping from utterance ID to speaker ID. If not provided, corpus_name must be provided.
-    is_speech_corpus: bool, whether the zip contains speech.
-    is_rir: bool, whether the zip contains RIR. If True, expect a config file in the zip that contains the meta data
-        info about the RIRs.
-    get_duration: bool, whether to get duration of the waveforms
-
-    Returned:
-        An object of type SpeechDataStream, RIRDataStream, or DataStream.
-    """
-    wav_reader = reader.ZipWaveIO(precision="float32")
+def gen_speech_stream_from_zip(zip_path, label_files=None, label_names=None, utt2spk=None, is_speech_corpus=True, is_rir=False, get_duration=False, corpus_name=None, file_extension='wav'):
+    """ Generate speech stream from zip file and utt2spk. The zip file contains wavfiles"""
     zip_file = zipfile.ZipFile(zip_path)
     all_list = zip_file.namelist()
     wav_list = [i for i in all_list if os.path.splitext(i)[1][1:] == file_extension]
-    utt_id_wav = wavlist2uttlist(wav_list)
-    # sort wav_list by utterance ID
-    tmp = sorted(zip(utt_id_wav, wav_list))
-    utt_id_wav = [i[0] for i in tmp]
-    wav_list = [i[1] for i in tmp]
 
-    def get_label(label_lines, selected_utt_id):
-        selected_label_list = []
-        for line in label_lines:
-            tmp = line.split(" ")
-            utt_id = tmp[0]
-            if utt_id in selected_utt_id:
-                tmp_label = np.asarray([int(j) for j in tmp[1:] if len(j)>0])[np.newaxis,:]
-                selected_label_list.append(tmp_label)
+    wav_reader = reader.ZipWaveIO(precision="float32")
+    utt_id_wav = wavlist2uttlist(wav_list)
+
+    def get_label(lines, utt_id, selected_utt_id):
+        label_list = [np.asarray([int(j) for j in i.split(" ")[1:] if len(j)>0]) for i in lines]
+        label_list = [np.reshape(i, (1, i.size)) for i in label_list]
+        selected_label_list = [label_list[utt_id.index(i)] for i in selected_utt_id]
         return selected_label_list
 
     if label_files is not None:
         # Find the intersection of the utterance IDs
-        selected_utt_id = set(utt_id_wav)
+        selected_utt_id = [i for i in utt_id_wav]
         utt_id_label = []
         label_file_lines = []
         for i in range(len(label_files)):
-            lines = my_cat(label_files[i])
-            lines.sort()        # each lines start with utterance ID, hence effectively sort the labels with utterance ID.
+            lines = utils.my_cat(label_files[i])
             curr_utt_id_label = [i.split(" ")[0] for i in lines]
-            selected_utt_id = set(curr_utt_id_label) & selected_utt_id
+            selected_utt_id = [id for id in selected_utt_id if id in curr_utt_id_label]
             utt_id_label.append(curr_utt_id_label)
             label_file_lines.append(lines)
 
@@ -573,14 +597,10 @@ def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_
         if label_names is None:
             label_names = ['label_'+str(i) for i in range(len(label_files))]
         for i in range(len(label_files)):
-            selected_label_list = get_label(label_file_lines[i], selected_utt_id)   # selected_label_list is sorted, as label_file_lines[i] is sorted.
+            selected_label_list = get_label(label_file_lines[i], utt_id_label[i], selected_utt_id)
             label_streams[label_names[i]] = DataStream(selected_label_list, is_file=False, reader=None)
 
-        selected_wav_list = [wav_list[i] for i in range(len(wav_list)) if utt_id_wav[i] in selected_utt_id]
-        selected_utt_id = list(selected_utt_id)
-        selected_utt_id.sort()
-        # note that selected_wav_list, selected_label_list, and selected_utt_id are all sorted by utterance ID. So they
-        # are guaranteed to have one-to-one correspondence if the utterance IDs are unique.
+        selected_wav_list = [wav_list[utt_id_wav.index(i)] for i in selected_utt_id]
     else:
         label_streams = None
         selected_utt_id = utt_id_wav
@@ -625,3 +645,82 @@ def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_
 
     return corpus_stream
 
+
+class DictDataStream(DataStream):
+    def __init__(self, data=None, precision='float32', is_file=True, reader=None, root=None):
+        # similar to DataStream, except that now the each data entry is a dictionary, rather than an array.
+        # More flexible and general.
+        super().__init__(data, precision, is_file, reader, frame_rate=-1, root=root)   # frame_rate is here just for interface compatibility.
+
+    def get_data(self, index):
+        index = np.asarray(index)
+        index = index.reshape(index.size)
+        data = []
+        name = []
+        for i in range(index.size):
+            if self.is_file:
+                curr_file = self.get_full_path(self.data[index[i]])
+                curr_data = self.get_data_from_file( curr_file )
+                name.append(curr_file)
+            else:
+                curr_data = self.data[index[i]]
+                name.append("DICTIONARY")
+
+            self.convert_precision(curr_data)
+            data.append(curr_data)
+
+        return data, name
+
+    def convert_precision(self, data):
+        for j in data:
+            if type(j) is np.ndarray:
+                j = utils.convert_data_precision(j, self.precision)
+
+    def get_data_from_file(self, file_name):
+        data = self.reader.read(file_name)
+        if isinstance(data, tuple):
+            data = data[0]
+        return self.convert_precision(data)
+
+    # disable following two functions
+    def set_data_len(self):
+        return None
+
+    def get_data_len(self, index):
+        return None
+
+    def get_data_len_from_file(self, file_name):
+        return None
+
+
+class DictSpeechDataStream(SpeechDataStream):
+    pass
+
+
+def merge_speech_streams(speech_streams):
+    """ Merge multiple speech stream objects derived from class SpeechDataStream.
+    If some speakers are shared among the streams, merge their utterance list.
+    Assume that there is no duplicate utterance ID in different streams.
+    Assume the data reader types are exactly the same for all the streams. """
+
+    utt_id = []
+    text = []
+    utt_list = []
+    utt2spk = dict()
+    for stream in speech_streams:
+        curr_data_stream = stream.data_stream
+        curr_utt_list = [curr_data_stream.get_full_path(i) for i in curr_data_stream.data]
+
+        utt_id += stream.utt_id
+        utt_list += curr_utt_list
+        if stream.text is not None:
+            text += stream.text
+        utt2spk.update( stream.utt2spk )
+
+    reader = copy.deepcopy(curr_data_stream.reader)
+    new_data_stream = sig.io.stream.DataStream(data=utt_list, precision=curr_data_stream.precision, is_file=True,
+                                           reader=reader, frame_rate=curr_data_stream.frame_rate)
+
+    new_stream = sig.io.stream.SpeechDataStream(utt_id, new_data_stream, utt2spk=utt2spk)
+
+    return new_stream

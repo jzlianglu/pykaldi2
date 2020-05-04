@@ -1,5 +1,4 @@
-from .simulation import MultiSourceSimulator, SimpleSimulator, imagesc
+from .simulation import Simulator, simulate
+from . import rirgen
 from . import config
-from . import overlap
-from . import freq_analysis
-from . import mask
+

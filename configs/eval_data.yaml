@@ -1,0 +1,4 @@
+clean_source:
+  1:    
+    type: Librispeech
+    wav: /datadisk2/lial/LibriSpeechWav/test-clean.zip
