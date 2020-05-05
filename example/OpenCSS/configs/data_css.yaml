@@ -1,0 +1,4 @@
+clean_source:
+  1:    
+    type: Librispeech
+    wav: /datadisk2/lial/OpenCSS/seg_wise/CenterMic/overlap_ratio_40.0_sil0.1_1.0_session8_actual40.5.zip
