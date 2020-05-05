@@ -7,7 +7,7 @@
 [ -f ./path.sh ] && . ./path.sh
 
 # begin configuration section.
-cmd=local/run.pl
+cmd=$PYKALDIPATH/example/OpenCSS/local/run.pl
 stage=0
 decode_mbr=true
 word_ins_penalty=0.0,0.5,1.0
@@ -17,8 +17,6 @@ iter=final
 #end configuration section.
 
 echo "$0 $@"  # Print the command line for logging
-
-. local/parse_options.sh
 
 if [ $# -ne 3 ]; then
   echo "Usage: local/score.sh [--cmd (run.pl|queue.pl...)] <lang-dir|graph-dir> <decode-dir>"
@@ -48,7 +46,7 @@ for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
     lattice-1best ark:- ark:- \| \
     lattice-align-words $lang_or_graph/phones/word_boundary.int $model ark:- ark:- \| \
     nbest-to-ctm ark:- - \| \
-    local/int2sym.pl -f 5 $lang_or_graph/words.txt ">&" $dir/LMWT_$wip.ctm
+    $PYKALDIPATH/example/OpenCSS/local/int2sym.pl -f 5 $lang_or_graph/words.txt ">&" $dir/LMWT_$wip.ctm
 done
 
 exit 0;

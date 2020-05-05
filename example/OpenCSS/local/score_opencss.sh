@@ -6,7 +6,7 @@
 
 
 # begin configuration section.
-cmd=local/run.pl
+cmd=$PYKALDIPATH/example/OpenCSS/local/run.pl
 stage=0
 word_ins_penalty=0.0,0.5,1.0
 min_lmwt=7
@@ -16,10 +16,8 @@ iter=final
 
 [ -f ./path.sh ] && . ./path.sh
 
-. local/parse_options.sh
-
 if [ $# -ne 3 ]; then
-  echo "Usage: local/score.sh [--cmd (run.pl|queue.pl...)] <data-dir> <lang-dir|graph-dir> <decode-dir>"
+  echo "Usage: local/score_opencss.sh [--cmd (run.pl|queue.pl...)] <transcription> <lang-dir|graph-dir> <decode-dir>"
   echo " Options:"
   echo "    --cmd (run.pl|queue.pl...)      # specify how to run the sub-processes."
   echo "    --stage (0|1|2)                 # start scoring script from part-way through."
@@ -55,10 +53,10 @@ done
 for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
   $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/hyp.LMWT.$wip.log \
     cat $dir/scoring/LMWT.$wip.tra \| \
-    local/int2sym.pl -f 2- $symtab \| sed 's:\<UNK\>::g' ">&" $dir/hyp_LMWT.$wip.txt 
+    $PYKALDIPATH/example/OpenCSS/local/int2sym.pl -f 2- $symtab \| sed 's:\<UNK\>::g' ">&" $dir/hyp_LMWT.$wip.txt 
 
   $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/score.LMWT.$wip.log \
-    python local/utt_wer.py $dir/hyp_LMWT.$wip.txt $dir/scoring/test_filt.txt ">&" $dir/result_LMWT_$wip || exit 1;
+    python $PYKALDIPATH/example/OpenCSS/local/utt_wer.py $dir/hyp_LMWT.$wip.txt $dir/scoring/test_filt.txt ">&" $dir/result_LMWT_$wip || exit 1;
 done
 
 exit 0;
