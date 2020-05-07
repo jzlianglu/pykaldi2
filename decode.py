@@ -28,6 +28,7 @@ def main():
     parser.add_argument("-batch_size", default=32, type=int, help="Override the batch size in the config")             
     parser.add_argument("-sweep_size", default=200, type=float, help="process n hours of data per sweep (default:60)")            
     parser.add_argument("-data_loader_threads", default=4, type=int, help="number of workers for data loading")
+    parser.add_argument("-gpuid", default=0, type=int, help="GPU ID")
 
     args = parser.parse_args()
 
@@ -67,7 +68,8 @@ def main():
     lstm = LSTMStack(model_config["feat_dim"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
     model = NnetAM(lstm, model_config["hidden_size"]*2, model_config["label_size"])
 
-    device = th.device("cuda:1" if th.cuda.is_available() else "cpu")
+    device = th.device("cuda:{}".format(args.gpuid) if th.cuda.is_available() else "cpu")
+    th.cuda.set_device(device)
     model.cuda()
 
     assert os.path.isfile(args.model_path), "ERROR: model file {} does not exit!".format(args.model_path)
