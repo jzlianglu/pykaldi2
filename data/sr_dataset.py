@@ -106,6 +106,10 @@ class SpeechDataset(data.Dataset):
             for i in range(1, len(self.source_stream_sizes)):
                 self.source_stream_cum_sizes.append(self.source_stream_cum_sizes[-1] + self.source_stream_sizes[i])
 
+        if 'simulation_prob' in config['data_config']:
+            simulation_prob = config['data_config']['simulation_prob']
+        else:
+            simulation_prob = 0
         generator_config = DataGeneratorSequenceConfig(
             use_reverb=config["data_config"]["use_reverb"],
             use_noise=config["data_config"]["use_dir_noise"],
@@ -116,7 +120,7 @@ class SpeechDataset(data.Dataset):
             seglen=config["data_config"]["seg_len"], 
             segshift=config["data_config"]["seg_shift"],
             use_cmn=config["data_config"]["use_cmn"],
-            simulation_prob=config['data_config']['simulation_prob']
+            simulation_prob=simulation_prob
         )
 
         data_generator = DataGeneratorTrain(source_streams, dir_noise_streams, rir_streams, generator_config, DEBUG=False)
