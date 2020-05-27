@@ -112,7 +112,7 @@ def main():
 
     # ceate model
     model_config = config["model_config"]
-    model = lstm.LSTMStack(model_config["feat_dim"], model_config["label_size"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
+    model = lstm.LSTMAM(model_config["feat_dim"], model_config["label_size"], model_config["hidden_size"], model_config["num_layers"], model_config["dropout"], True)
 
     # Start training
     th.backends.cudnn.enabled = True
