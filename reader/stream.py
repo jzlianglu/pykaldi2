@@ -530,7 +530,7 @@ def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_
         where utt_id_1 and utt_id_2 are utterance IDs of the sentences and can be any string as far as each utterance
         has an unique ID. The utt_ids must be compatible with the file_names (excluding extension) in the zip file.
     file_extension: define the extension of the files in the zip file. Used to filter out non-waveform files.
-    label_files: list of strings specifying the name of the label_files, e.g. "frame_label', 'word_label', etc.
+    label_names: list of strings specifying the name of the label_files, e.g. "frame_label', 'word_label', etc.
     utt2spk: a dictionary mapping from utterance ID to speaker ID. If not provided, corpus_name must be provided.
     is_speech_corpus: bool, whether the zip contains speech.
     is_rir: bool, whether the zip contains RIR. If True, expect a config file in the zip that contains the meta data
