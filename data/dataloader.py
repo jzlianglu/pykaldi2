@@ -40,8 +40,7 @@ class ChunkDataloader(DataLoader):
                                               batch_size=batch_size,
                                               shuffle=True,
                                               num_workers=num_workers,
-                                              collate_fn=self.collate_fn,
-                                              timeout=timeout)
+                                              collate_fn=self.collate_fn)
         else:
             import horovod.torch as hvd
             sampler = DistributedSampler(dataset, num_replicas=hvd.size(), rank=hvd.rank())
