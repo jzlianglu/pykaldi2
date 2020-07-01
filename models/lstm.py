@@ -33,7 +33,7 @@ import torch.nn as nn
 class LSTMAM(nn.Module):
 
     def __init__(self, input_size, output_size, hidden_size, num_layers, dropout, bidirectional):
-        super(LSTMStack, self).__init__()
+        super(LSTMAM, self).__init__()
 
         self.input_size = input_size
         self.hidden_size = hidden_size

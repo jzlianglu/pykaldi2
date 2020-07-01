@@ -496,6 +496,11 @@ class WSJDataStream(SpeechDataStream):
         return utt_id[:3]
 
 
+class TimitDataStream(SpeechDataStream):
+    def utt_id2spk_id(self, utt_id):
+        return utt_id.split("_")[0]
+
+
 def gen_speech_stream_from_list(wav_list, utt2spk, get_duration=True, use_zip=True):
     """ Generate speech stream from wav file list and utt2spk. """
 
@@ -525,7 +530,7 @@ def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_
         where utt_id_1 and utt_id_2 are utterance IDs of the sentences and can be any string as far as each utterance
         has an unique ID. The utt_ids must be compatible with the file_names (excluding extension) in the zip file.
     file_extension: define the extension of the files in the zip file. Used to filter out non-waveform files.
-    label_files: list of strings specifying the name of the label_files, e.g. "frame_label', 'word_label', etc.
+    label_names: list of strings specifying the name of the label_files, e.g. "frame_label', 'word_label', etc.
     utt2spk: a dictionary mapping from utterance ID to speaker ID. If not provided, corpus_name must be provided.
     is_speech_corpus: bool, whether the zip contains speech.
     is_rir: bool, whether the zip contains RIR. If True, expect a config file in the zip that contains the meta data
@@ -538,7 +543,7 @@ def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_
     wav_reader = reader.ZipWaveIO(precision="float32")
     zip_file = zipfile.ZipFile(zip_path)
     all_list = zip_file.namelist()
-    wav_list = [i for i in all_list if os.path.splitext(i)[1][1:] == file_extension]
+    wav_list = [i for i in all_list if os.path.splitext(i)[1][1:].lower() == file_extension]
     utt_id_wav = wavlist2uttlist(wav_list)
     # sort wav_list by utterance ID
     tmp = sorted(zip(utt_id_wav, wav_list))
@@ -595,6 +600,8 @@ def gen_stream_from_zip(zip_path, file_extension='wav', label_files=None, label_
             corpus_stream = LibriDataStream(selected_utt_id, data_stream, label_streams=label_streams)
         elif corpus_name == 'WSJ':
             corpus_stream = WSJDataStream(selected_utt_id, data_stream, label_streams=label_streams)
+        elif corpus_name == 'TIMIT':
+            corpus_stream = TimitDataStream(selected_utt_id, data_stream, label_streams=label_streams)
         else:       # for unknown corpus, you need to provide the utt2spk mapping.
             corpus_stream = SpeechDataStream(selected_utt_id, data_stream, utt2spk=utt2spk, label_streams=label_streams)
     elif is_rir:
